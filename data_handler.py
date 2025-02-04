@@ -41,11 +41,27 @@ class Data_Handler:
         for example, weather they have the same keys. If not, throw out a RowdataError.
         If there are any replicates in key_dict, it repairs them.'''
 
+        # garentee at least one character is available in data_dict
+        if len(self.data_dict.items()) >= 1:
+            pass
+        else:
+            raise RowdataError('No character in imported data.') 
+
+        # check if all characters have the same keys
+        tmp_keys = self.data_dict[list(self.data_dict.keys())[0]].keys()
+        for character in self.data_dict:
+            if self.data_dict[character].keys() == tmp_keys:
+                pass
+            else:
+                raise RowdataError(f'character {character} has different keys. Please check imported data.')
+
         # check if the key from data_dict the same as that from key_dict
-        if self.data_dict.keys() != self.key_dict.keys():
-            raise RowdataError('loaded .xlsx data contains error')
+        if tmp_keys != self.key_dict.keys():
+            raise RowdataError('loaded .xlsx data contains error, key_dict and data_dict have different key list.')
         
         # delete replicates if there are any same alias in key_dict
+        # here no Error or jumping out, but try to repair alias dict by deleting replicates,
+        # because the alias does not affects the stability of the program.
         temp_key_dict = {}
         seen_alias = set()
         for keys, values in self.key_dict.items():

@@ -1,7 +1,10 @@
 import keyboard, pyperclip, time
 from data_handler import Data_Handler
 
-
+def get_datapath():
+    '''tem function, should be deleted after test.'''
+    # TODO: this function should be deleted after test
+    return r'C:\Users\86781\VS_Code_Project\form_filler_new\assets\xlsx_database.xlsx'
 
 
 class ServiceStatusError(Exception):
@@ -25,7 +28,8 @@ class Business_Handler:
         self.basic_service_running = False # basic service means the main program
         self.working_service_running = False # working service means the extended copy/paste service
 
-        data_handler = Data_Handler()
+        # TODO: the datapath should be returned from GUI layer and should be obtained from .json file.
+        data_handler = Data_Handler(get_datapath()) 
         self.data_handler = data_handler
 
         self.character_list = []
@@ -97,25 +101,6 @@ class Business_Handler:
         '''return if the working service is running,
         noted: working service should only run under basic service running'''
         return self.working_service_running and self.basic_service_running
-
-
-    # clipboard related read/write functions
-    def get_clipboard_content(self) -> str:
-        """get content from clipboard"""
-        try:
-            time.sleep(0.1)  # wait for clipboard refresh
-            text = pyperclip.paste()
-            return text if text else None
-        except Exception as e:
-            print(f"Error loading flipboardcontent: {e}")
-            return None
-
-    def set_clipboard_content(self, text: str):
-        '''set clipboard content from given string'''
-        if text is not None:
-            pyperclip.copy(text)
-        else:
-            raise KeyError
 
 
     # ui navigate functions

@@ -35,7 +35,7 @@ def prehandle_xlsx(path: str) -> dict:
 
 def write_xlsx(key_dict: dict, data_dict: dict):
     '''Write the dicts in Data_Handler back to the .xlsx file. Should be called when terminating the program.'''
-    # TBD
+    # TODO: the function to write data_dict and key_dict back to .xlsx file after using the app.
     pass
 
 def load_setting_from_json(json_file_path: str) -> str:
