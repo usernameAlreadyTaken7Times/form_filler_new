@@ -1,34 +1,60 @@
-from io_handler import prehandle_xlsx, write_xlsx
+import pandas as pd
+from config_handler import ConfigSingleton
+from error_list import Errors
 
-# Error types
-class OverwriteError(Exception):
-    '''This Error means you are trying to rewrite the value stored in the dict.'''
-    def __init__(self, message):
-        self.message = message
-        super().__init__(self.message)
+def load_and_prehandle_xlsx(data_path: str, data_sheet: str, key_path: str, key_sheet: str) -> dict:
+    '''Prehandle the .xlsx file as the data source for further use. 
+    The .xlsx file should contain two sheets named "key" and "data".
+    The content in these two sheets are returned in dicts.'''
 
-class RowdataError(Exception):
-    '''This Error means the loaded .xlsx data contains error, for example, the
-    main keys are different in the sheets.'''
-    def __init__(self, message):
-        self.message = message
-        super().__init__(self.message)
+    data_sheets = pd.read_excel(data_path, sheet_name=[data_sheet])
+    key_sheets = pd.read_excel(key_path, sheet_name=[key_sheet])
 
-class NoMatchError(Exception):
-    '''This Error means there is no match key for the given alias.'''
-    def __init__(self, message):
-        self.message = message
-        super().__init__(self.message)
+    # replace the `_x000D_` in sheets, such sign is annoying from Office and Windows system
+    df_key = key_sheets['key'].map(lambda x: x.replace('_x000D_\n', '').strip() if isinstance(x, str) else x)
+    df_data = data_sheets['data'].map(lambda x: x.replace('_x000D_\n', '').strip() if isinstance(x, str) else x)
 
-class Data_Handler:
+    key_dict: dict = {}
+    df_key.fillna('', inplace=True) # fill all missing alias
+    key_dict = df_key.set_index(df_key.columns[0]).T.to_dict('list')
+    for key in key_dict:
+        for i in range(len(key_dict[key])):
+            if key_dict[key][-1] == '':
+                key_dict[key] = key_dict[key][:-1]
+            else:
+                break
+    
+    data_dict: dict = {}
+    data_dict = {
+        row['姓名']: {
+            **row.to_dict(),  # change the row to a dict
+            "姓名": row['姓名'],  # adds a column with given name
+        }
+        for _, row in df_data.iterrows()
+    }
+    return key_dict, data_dict
+
+def write_xlsx(key_dict: dict, data_dict: dict):
+    '''Write the dicts in Data_Handler back to the .xlsx file. Should be called when terminating the program.'''
+    # TODO: the function to write data_dict and key_dict back to .xlsx file after using the app.
+    pass
+
+
+class Data_Handler():
     '''This class works as a database during the program running, and is called by Data_Handler.
         Functions in it are called to modify the data inside database only.'''
     # init
-    def __init__(self, data_path):
-        self.data_path = data_path
+    def __init__(self):
+        '''database_dict should contain the path and sheet name of data_sheet and key_sheet.'''
+        self.data_path = ConfigSingleton.get_data_dict_config()[0]
+        self.data_sheetname = ConfigSingleton.get_data_dict_config()[1]
+        self.key_path = ConfigSingleton.get_key_dict_config()[0]
+        self.key_sheetname = ConfigSingleton.get_key_dict_config()[1]
 
         self.data_loaded = False
 
+        self.data_dict: dict[str, dict]
+        self.key_dict: dict[str, str]
         self.data_dict = {}
         self.key_dict = {}
 
@@ -45,7 +71,7 @@ class Data_Handler:
         if len(self.data_dict.items()) >= 1:
             pass
         else:
-            raise RowdataError('No character in imported data.') 
+            raise Errors.RowdataError('No character in imported data.') 
 
         # check if all characters have the same keys
         tmp_keys = self.data_dict[list(self.data_dict.keys())[0]].keys()
@@ -53,11 +79,11 @@ class Data_Handler:
             if self.data_dict[character].keys() == tmp_keys:
                 pass
             else:
-                raise RowdataError(f'character {character} has different keys. Please check imported data.')
+                raise Errors.RowdataError(f'character {character} has different keys. Please check imported data.')
 
         # check if the key from data_dict the same as that from key_dict
         if tmp_keys != self.key_dict.keys():
-            raise RowdataError('loaded .xlsx data contains error, key_dict and data_dict have different key list.')
+            raise Errors.RowdataError('loaded .xlsx data contains error, key_dict and data_dict have different key list.')
         
         # delete replicates if there are any same alias in key_dict
         # here no Error or jumping out, but try to repair alias dict by deleting replicates,
@@ -79,10 +105,12 @@ class Data_Handler:
 
     # io
     def load_data_xlsx(self):
-        self.key_dict, self.data_dict = prehandle_xlsx(self.data_path)
+        '''load data_dict and key_dict from .xlsx file'''
+        self.key_dict, self.data_dict = load_and_prehandle_xlsx(self.data_path, self.data_sheetname, self.key_path, self.key_sheetname)
         self.data_loaded = True
 
     def write_data_xlsx(self):
+        '''write data_dict and key_dict back to .xlsx file'''
         write_xlsx(self.key_dict, self.data_dict)
         self.data_loaded = False
 
@@ -109,7 +137,7 @@ class Data_Handler:
                 self.data_dict[name_key][key] = None
             self.key_dict[key] = [] # create a empty alias list 
         else:
-            raise OverwriteError("You are trying to rewrite the value stored in the dict.")
+            raise Errors.OverwriteError("You are trying to rewrite the value stored in the dict.")
     
     def del_key_value_pair(self, person: str, key: str):
         '''delete an existing key-value pair for all people, modify both data sheets(value_dict & key_dict).'''
@@ -134,12 +162,12 @@ class Data_Handler:
             for key in self.data_dict[new_person]:
                 self.data_dict[new_person][key] = None # set all values of this person as None as default
         else:
-            raise NoMatchError('Error chosing person.')
+            raise Errors.NoMatchError('Error chosing person.')
 
     def del_person(self, del_person: str):
         '''delete a person from data_dict'''
         if del_person not in self.data_dict.keys():
-            raise NoMatchError('Error chosing person.')
+            raise Errors.NoMatchError('Error chosing person.')
         else:
             del self.data_dict[del_person]
 
@@ -159,6 +187,7 @@ class Data_Handler:
         it is the same for all characters, so just return the key list for the first character.'''
         first_character = list(self.data_dict.keys())[0]
         return list(self.data_dict[first_character].keys())
+
 
     # alias_dict(key_dict) related functions
     def key_has_any_alias(self, key_name: str) -> bool:

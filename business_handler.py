@@ -1,35 +1,17 @@
-import keyboard, pyperclip, time
 from data_handler import Data_Handler
+from error_list import Errors
 
-def get_datapath():
-    '''tem function, should be deleted after test.'''
-    # TODO: this function should be deleted after test
-    return r'C:\Users\86781\VS_Code_Project\form_filler_new\assets\xlsx_database.xlsx'
+from shared_queue import shared_queue
+import threading
 
-
-class ServiceStatusError(Exception):
-    '''This Error means there is problem with service status.'''
-    def __init__(self, message):
-        self.message = message
-        super().__init__(self.message)
-
-class KeyNotFoundError(Exception):
-    '''This Error means the given key does not match any result.'''
-    def __init__(self, message):
-        self.message = message
-        super().__init__(self.message)
-
-
-
-
-class Business_Handler:
-    '''This Business_Handler handles the stored data in data_handler corresponsly.'''
+class Business_Handler(threading.Thread):
+    '''This Business_Handler handles the stored data in data_handler corresponsly,
+    and answers to upper App layer.'''
     def __init__(self):
         self.basic_service_running = False # basic service means the main program
-        self.working_service_running = False # working service means the extended copy/paste service
+        self.business_service_running = False # business service means the extended copy/paste service
 
-        # TODO: the datapath should be returned from GUI layer and should be obtained from .json file.
-        data_handler = Data_Handler(get_datapath()) 
+        data_handler = Data_Handler()
         self.data_handler = data_handler
 
         self.character_list = []
@@ -45,24 +27,22 @@ class Business_Handler:
 
     # start/stop services or init functions
     def start_basic_service(self):
-        self.basic_service_running = True
+        if not self.basic_service_running:
+            self.basic_service_running = True
+        else:
+            raise Errors.ServiceStatusError('wrong business service status')
     
     def stop_basic_service(self):
-        self.basic_service_running = False
+        if self.basic_service_running:
+            self.basic_service_running = False
+        else:
+            raise Errors.ServiceStatusError('wrong business service status')
     
-    def init_listening(self): 
-        '''This function aims to listen to the keyboard shortcut input at the very beginning
-          to tell if the service is started or not.'''
-        if keyboard.is_pressed('ctrl+r') and self.basic_service_running is False:
-            self.start_basic_service()
-        elif keyboard.is_pressed('ctrl+t') and self.basic_service_running is True:
-            self.stop_basic_service()
-    
-    def start_working_service(self):
-        '''This function starts the working service (the extended copy/paste service).
+    def start_business_service(self):
+        '''This function starts the business service (the extended copy/paste service).
         It should only be called when the basic service is on.'''
-        if self.get_basic_service_status() and not self.get_working_service_status():
-            self.working_service_running = True
+        if self.get_basic_service_status() and not self.get_business_service_status():
+            self.business_service_running = True
 
             self.character_list = self.data_handler.get_character_list() # character list init
             self.active_character = self.character_list[self.active_character_index] # default character as the first one
@@ -71,13 +51,13 @@ class Business_Handler:
             self.active_key = self.key_list[self.active_key_index] # default key as the first one
             self.active_value = self.data_handler.get_value_from_key(self.active_character, self.active_key) # upudate active value
         else:
-            raise ServiceStatusError('there is problem with service status')
+            raise Errors.ServiceStatusError('there is problem with service status')
         
-    def stop_working_service(self):
-        '''This function stops the working service (the extended copy/paste service).
+    def stop_business_service(self):
+        '''This function stops the business service (the extended copy/paste service).
         It should only be called when the basic service is on.'''
-        if self.get_basic_service_status() and self.get_working_service_status():
-            self.working_service_running = False
+        if self.get_basic_service_status() and self.get_business_service_status():
+            self.business_service_running = False
 
             self.character_list = [] # clean up character list
             self.active_character = '' # clean up character memory
@@ -89,7 +69,25 @@ class Business_Handler:
             self.active_value = ''
             self.active_alias = '' # reset
         else:
-            raise ServiceStatusError('there is problem with service status')
+            raise Errors.ServiceStatusError('there is problem with service status')
+
+
+    # business main thread
+    def run_business(self):
+        '''business main thread, should running in background'''
+        while True:
+
+            # receive signals
+            tmp_news = shared_queue.get()
+            if tmp_news['source'] == 'ui' and tmp_news['content'] == 'set_dicts':
+                self.data_handler.data_dict, self.data_handler.key_dict = tmp_news['content']
+
+            if tmp_news['source'] == 'ui' and tmp_news['content'] == 'set_data_dict':
+                self.data_handler.data_dict = tmp_news['content']
+            
+            if tmp_news['source'] == 'ui' and tmp_news['content'] == 'set_key_dict':
+                self.data_handler.key_dict = tmp_news['content']
+
 
 
     # check service status functions
@@ -97,10 +95,10 @@ class Business_Handler:
         '''return if the basic service is running'''
         return self.basic_service_running
     
-    def get_working_service_status(self) -> bool:
-        '''return if the working service is running,
-        noted: working service should only run under basic service running'''
-        return self.working_service_running and self.basic_service_running
+    def get_business_service_status(self) -> bool:
+        '''return if the business service is running,
+        noted: business service should only run under basic service running'''
+        return self.business_service_running and self.basic_service_running
 
 
     # ui navigate functions
@@ -209,37 +207,7 @@ class Business_Handler:
             self.active_character_index = self.character_list.index(self.active_character) # update active character index
 
 
-    # working service component functions
-    def get_ecp_value(self) -> str:
-        '''return the value from data_dict of data_handler(if exist),
-        should be called when 'Ctrl+C' are pressed or equivalent activity'''
-        if not self.get_working_service_status:
-            raise ServiceStatusError
-        
-        text = self.get_clipboard_content()
-        if text in self.key_list:
-            # success found in key-value pair
-            self.active_key = text
-            self.active_key_index = self.key_list.index(self.active_key)
-            self.active_value = self.data_handler.get_value_from_key(self.active_character, self.active_key)
-            return self.active_value
-        else:
-            key = self.data_handler.find_key_from_alias(text)
-            if key is not None: # success found in alias, search in key-value pairs with corresponding key
-                self.active_key = key
-                self.active_alias = text
-                self.active_key_index = self.key_list.index(self.active_key)
-                self.active_value = self.data_handler.get_value_from_key(self.active_character, self.active_key)
-                return self.active_value
-        
-            # neither in key-value pairs nor in alias
-            return None
-
-
-
-# import sys
-# print(sys.path)
-
-# kh = Keyboard_Handler('a')
-# kh.start_listening_init()
-# pass
+    # comm functions
+    def send_dicts(self):
+        '''send data_dict and key_dict to the queue'''
+        shared_queue.put({'source': 'business', 'command': 'send_dicts', 'content': (self.data_handler.data_dict, self.data_handler.key_dict)})
