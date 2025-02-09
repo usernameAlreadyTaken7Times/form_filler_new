@@ -1,8 +1,8 @@
 from data_handler import Data_Handler
 from error_list import Errors
 
-from shared_queue import shared_queue
 import threading
+from shared_queue import broadcaster
 
 class Business_Handler(threading.Thread):
     '''This Business_Handler handles the stored data in data_handler corresponsly,
@@ -23,6 +23,8 @@ class Business_Handler(threading.Thread):
         self.active_key = ''
         self.active_value = ''
         self.active_alias = ''
+
+        self.queue_business = broadcaster.register('business')
 
 
     # start/stop services or init functions
@@ -50,6 +52,9 @@ class Business_Handler(threading.Thread):
             self.key_list = self.data_handler.get_key_list() # get default key list
             self.active_key = self.key_list[self.active_key_index] # default key as the first one
             self.active_value = self.data_handler.get_value_from_key(self.active_character, self.active_key) # upudate active value
+        
+            threading.Thread(target=self.run_business, daemon=True).start() # main thread start
+
         else:
             raise Errors.ServiceStatusError('there is problem with service status')
         
@@ -77,16 +82,30 @@ class Business_Handler(threading.Thread):
         '''business main thread, should running in background'''
         while True:
 
+            try:
+                tmp_news = self.queue_business.get(timeout=0.3)
+            except:
+                tmp_news = None
+
+
             # receive signals
-            tmp_news = shared_queue.get()
-            if tmp_news['source'] == 'ui' and tmp_news['content'] == 'set_dicts':
+            
+            if tmp_news and tmp_news['source'] == 'ui' and tmp_news['command'] == 'set_dicts':
                 self.data_handler.data_dict, self.data_handler.key_dict = tmp_news['content']
 
-            if tmp_news['source'] == 'ui' and tmp_news['content'] == 'set_data_dict':
+            elif tmp_news and tmp_news['source'] == 'ui' and tmp_news['command'] == 'set_data_dict':
                 self.data_handler.data_dict = tmp_news['content']
             
-            if tmp_news['source'] == 'ui' and tmp_news['content'] == 'set_key_dict':
+            elif tmp_news and tmp_news['source'] == 'ui' and tmp_news['command'] == 'set_key_dict':
                 self.data_handler.key_dict = tmp_news['content']
+            
+            elif tmp_news and tmp_news['command'] == 'get_ecp_value':
+                tmp_text = tmp_news['content']
+                tmp_return_value = self.get_ecp_value(tmp_text)
+                if isinstance(tmp_return_value, str):
+                    self.send_message('set_ecp_value', tmp_return_value)
+                else: # return value is '', means no key/alias is match the input
+                    self.send_message('no_ecp_value_found', '')
 
 
 
@@ -210,4 +229,36 @@ class Business_Handler(threading.Thread):
     # comm functions
     def send_dicts(self):
         '''send data_dict and key_dict to the queue'''
-        shared_queue.put({'source': 'business', 'command': 'send_dicts', 'content': (self.data_handler.data_dict, self.data_handler.key_dict)})
+        self.send_message('send_dicts', (self.data_handler.data_dict, self.data_handler.key_dict))
+
+    def send_message(self, command: str, content: str):
+        '''send a message from business subfunction to broadcast queue'''
+        broadcaster.broadcast({'source': 'business', 'command': command, 'content': content})
+
+
+    # get key value function
+    def get_ecp_value(self, text: str) -> str:
+        # TBD: finish logic
+        '''return the value from data_dict of data_handler(if exist),
+        should be called when 'Ctrl+C' are pressed or equivalent activity'''
+        if not self.get_business_service_status():
+            raise Errors.ServiceStatusError
+        
+        if text in self.key_list: # success found in key-value pair
+            self.active_key = text
+            self.active_key_index = self.key_list.index(self.active_key)
+            self.active_value = self.data_handler.get_value_from_key(self.active_character, self.active_key)
+            return self.active_value
+        else:
+            key = self.data_handler.find_key_from_alias(text)
+            if key is not None: # success found in alias, in key-value pairs with corresponding key
+                self.active_key = key
+                self.active_alias = text
+                self.active_key_index = self.key_list.index(self.active_key)
+                self.active_value = self.data_handler.get_value_from_key(self.active_character, self.active_key)
+                return self.active_value
+        
+            # neither in key-value pairs nor in alias
+            return None
+        
+

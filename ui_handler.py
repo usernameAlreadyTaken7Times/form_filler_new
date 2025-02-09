@@ -2,8 +2,8 @@ import PySimpleGUI as sg
 from error_list import Errors
 from config_handler import ConfigSingleton
 
-from shared_queue import shared_queue
 import threading
+from shared_queue import broadcaster
 
 
 class UI_Handler(threading.Thread):
@@ -16,8 +16,9 @@ class UI_Handler(threading.Thread):
         # vairables
         self.config_filepath = config_filepath
         self.window_running = False
+        
 
-        self.data_dict: dict
+        self.data_dict: dict[str, dict]
         self.key_dict: dict
         self.data_dict, self.key_dict = self.get_dicts_content_from_data_handler()
 
@@ -25,12 +26,6 @@ class UI_Handler(threading.Thread):
         main_window_layout = [
             [sg.Text("Form_Filler v0.3", font=("Arial", 12, "bold"), text_color="white")],
             [sg.Text("an extended copy/paste service", font=("Arial", 9), text_color="white")],
-            [sg.HorizontalSeparator()],
-
-            [sg.Text("Please confirm/load a config file.", font=("Arial", 9), text_color="white", key="TEXT_config_status")],
-            [sg.Checkbox("use default config", key="CHECK_use_default_config", enable_events=True, default=True)],
-            [sg.Button('Confirm', size=(9, 1), font=("Arial", 8), key="kEY_switch_config"), 
-              sg.Button('Cancel', size=(9, 1), font=("Arial", 8), key="kEY_cancel_config")],
             [sg.HorizontalSeparator()],
             
             [sg.Text("Run/Terminate", font=("Arial", 9), text_color="white")],
@@ -52,14 +47,14 @@ class UI_Handler(threading.Thread):
                                  finalize=True)
 
         # window init setting
-        self.window['kEY_cancel_config'].update(disabled=True)
+        self.queue_ui = broadcaster.register('ui')
 
     # start/stop functions
     def start_GUI(self):
         '''starts the GUI program and show the window'''
         if not self.window_running:
             self.window_running = True
-            self.run_ui()
+            threading.Thread(target=self.run_ui, daemon=True).start()
         else:
             raise Errors.ServiceStatusError('GUI status error')
         
@@ -74,41 +69,21 @@ class UI_Handler(threading.Thread):
         '''ui main thread, controls the ui logic.'''
         while True:
             event, values = self.window.read()
+            try:
+                tmp_news = self.queue_ui.get(timeout=0.3)
+            except:
+                tmp_news = None
+
+            # send signals
+            # if event == xx: # ui butten to get ecp value
+            #     pass # send queue info
+
+            # receive signals
+            if tmp_news and tmp_news['soruce'] == 'keyboard' and tmp_news['command'] == 'set_ecp_value':
+                # TODO: set ecp value on gui
+                pass
 
             # confirm/load config file related
-            if event == 'CHECK_use_default_config':
-                new_text = 'confirm' if values['CHECK_use_default_config'] else 'load'
-                self.window['kEY_switch_config'].update(new_text)
-
-            if event == 'kEY_switch_config':
-                if values['CHECK_use_default_config']:
-                    try:
-                        ConfigSingleton.initialize(self.config_filepath)  # load default config file
-                        self.window['CHECK_use_default_config'].update(disabled=True) # disable load/confirm button
-                        self.window['kEY_switch_config'].update(disabled=True)
-                        self.window['kEY_cancel_config'].update(disabled=False)
-                        self.window['TEXT_config_status'].update('Config file successfully loaded.')
-                    except:
-                        raise KeyError # error loading .json file
-                else:
-                    self.config_filepath = self.popup_config_choose(self.config_filepath)
-                    try:
-                        ConfigSingleton.initialize(self.config_filepath)  # load new config file
-                        self.window['CHECK_use_default_config'].update(disabled=True) # disable load/confirm button
-                        self.window['kEY_switch_config'].update(disabled=True)
-                        self.window['kEY_cancel_config'].update(disabled=False)
-                        self.window['TEXT_config_status'].update('Config file successfully loaded.')
-                    except:
-                        raise KeyError # error loading .json file
-                
-                print(self.config_filepath)
-
-            if event == 'kEY_cancel_config': # should only be called when the KEY_switch_config is disabled
-                self.window['CHECK_use_default_config'].update(disabled=False) # enable load/confirm button
-                self.window['kEY_switch_config'].update(disabled=False)
-                self.window['kEY_cancel_config'].update(disabled=True)
-                self.window['TEXT_config_status'].update('Please confirm/load config file.')
-
             if event == 'KEY_data_modifier':
                 self.popup_data_dict_modifier()
                 self.set_data_dict_content_to_data_handler() # sync the data_dict and key_dict with updates
@@ -123,35 +98,6 @@ class UI_Handler(threading.Thread):
                 break
  
     # thread related functions
-    def popup_config_choose(self, default_json_path: str):
-        '''pop up a subwindow to get new .json config file path, and return the .json path back'''
-
-        popup_window_layout = [
-            [sg.Text("choose a .json config file")],
-            [sg.InputText(default_text=default_json_path, key="TEXT_json_config_file"), sg.FileBrowse(initial_folder=default_json_path)],
-            [sg.Button("confirm", key="KEY_confirm")]
-        ]
-
-        config_window = sg.Window('choose .json config file', popup_window_layout, keep_on_top=True, finalize=True)
-        config_window.force_focus()
-
-        while True:
-            event, values = config_window.read()
-            if event is sg.WIN_CLOSED:
-                sg.popup_ok('Use default config file instead', title='confirm', keep_on_top=True)
-                selected_file = default_json_path
-                break
-            elif event == "KEY_confirm":
-                config_window['TEXT_json_config_file'].update(values["TEXT_json_config_file"])
-                selected_file: str = values["TEXT_json_config_file"]
-                if selected_file.endswith('.json'):
-                    break
-                else:
-                    sg.popup_error('please choose a .json config file', title='Error', keep_on_top=True)
-
-        config_window.close()
-        return selected_file
-
     def get_dicts_content_from_data_handler(self):
         '''use queue to request data_dict and key_dict from data_handler, should be called by init'''
         # shared_queue.put({{'source':'ui','command':'get_dicts', 'content': ''}})
@@ -295,7 +241,12 @@ class UI_Handler(threading.Thread):
         tmp_data_dict = self.key_dict.copy() # create a copy of key_dict for in-function use
         selected_key = None
 
-        
+
+    # comm functions
+    def send_message(self, command: str, content: str):
+        '''send a message from ui subfunction to broadcast queue'''
+        broadcaster.broadcast({'source': 'ui', 'command': command, 'content': content})
+
 
 A = UI_Handler(r'C:\Users\86781\VS_Code_Project\form_filler_new\config.json')
 A.start_GUI()
