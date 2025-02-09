@@ -29,6 +29,10 @@ class Application_Handler():
         '''start the application, should be called when 'Ctrl+R' is pressed.'''
         if not self.app_running:
             self.app_running = True
+            self.keyboard_handler.run_keyboard_listening()
+            self.business_handler.run_business()
+            self.ui_handler.start_GUI()
+            self.ui_handler.run_ui() # other threads's starting signal are run function, while ui is the main thread
 
 
     
@@ -36,5 +40,8 @@ class Application_Handler():
         '''stop the application, should be called when 'Ctrl+T' is pressed.'''
         if self.app_running:
             self.app_running = False
-            # TODO: stop three subsystems
-    
+            self.keyboard_handler.stop_listening_service()
+            self.business_handler.stop_business_service
+            self.ui_handler.stop_GUI()
+
+

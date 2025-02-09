@@ -2,7 +2,9 @@ import pandas as pd
 from config_handler import ConfigSingleton
 from error_list import Errors
 
-def load_and_prehandle_xlsx(data_path: str, data_sheet: str, key_path: str, key_sheet: str) -> dict:
+from typing import Tuple
+
+def load_and_prehandle_xlsx(data_path: str, data_sheet: str, key_path: str, key_sheet: str) -> Tuple[dict, dict]:
     '''Prehandle the .xlsx file as the data source for further use. 
     The .xlsx file should contain two sheets named "key" and "data".
     The content in these two sheets are returned in dicts.'''

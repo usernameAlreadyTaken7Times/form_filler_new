@@ -3,6 +3,7 @@ from error_list import Errors
 
 from shared_queue import broadcaster
 import threading
+from queue import Queue # only for ide's static analysis
 
 
 class Keyboard_Handler(threading.Thread):
@@ -10,7 +11,7 @@ class Keyboard_Handler(threading.Thread):
     It involves monitoring keyboard input shortcuts and answering to upper UI layer.'''
     def __init__(self):
         self.keyboard_listening_service = False
-        self.queue_keyboard = broadcaster.register('keyboard')
+        self.queue_keyboard: Queue = broadcaster.register('keyboard')
         
 
     # start/stop functions
@@ -44,6 +45,10 @@ class Keyboard_Handler(threading.Thread):
                 tmp_text = self.get_clipboard_content()
                 self.send_message('get_ecp_value', tmp_text)
     
+
+            # mark queue task as done, as long as tmp_news is not None
+            if isinstance(tmp_news, Queue):
+                tmp_news.task_done()
 
 
     # clipboard related read/write functions

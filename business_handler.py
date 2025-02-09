@@ -3,6 +3,9 @@ from error_list import Errors
 
 import threading
 from shared_queue import broadcaster
+from queue import Queue # only for ide's static analysis
+
+
 
 class Business_Handler(threading.Thread):
     '''This Business_Handler handles the stored data in data_handler corresponsly,
@@ -24,7 +27,7 @@ class Business_Handler(threading.Thread):
         self.active_value = ''
         self.active_alias = ''
 
-        self.queue_business = broadcaster.register('business')
+        self.queue_business: Queue = broadcaster.register('business')
 
 
     # start/stop services or init functions
@@ -106,6 +109,11 @@ class Business_Handler(threading.Thread):
                     self.send_message('set_ecp_value', tmp_return_value)
                 else: # return value is '', means no key/alias is match the input
                     self.send_message('no_ecp_value_found', '')
+
+
+            # mark queue task as done, as long as tmp_news is not None
+            if isinstance(tmp_news, Queue):
+                tmp_news.task_done()
 
 
 
