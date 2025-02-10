@@ -21,36 +21,37 @@ class UI_Handler(threading.Thread):
     def __init__(self, config_filepath: str): 
         
         # vairables
-        self.config_filepath = config_filepath
+        ConfigSingleton.initialize(config_filepath) # init config file and enable using anywhere in the whole program
+        self.listening_service_running = False
         self.window_running = False
         
-
+        # get replica from data_handler during init, and write the contents back when the GUI stops with functions 'set_dicts_content_to_data_handler'
         self.data_dict: dict[str, dict]
         self.key_dict: dict[str, list]
         self.data_dict, self.key_dict = self.get_dicts_content_from_data_handler()
 
         # define main GUI window
-        main_window_layout = [
+        self.main_window_layout = [
             [sg.Text("Form_Filler v0.3", font=("Arial", 12, "bold"), text_color="white")],
             [sg.Text("an extended copy/paste service", font=("Arial", 9), text_color="white")],
             [sg.HorizontalSeparator()],
             
             [sg.Text("Run/Terminate", font=("Arial", 9), text_color="white")],
-            [sg.Button("Run", size=(8, 1), font=("Arial", 8), key="KEY_run"), 
-              sg.Button("Terminate", size=(8, 1), font=("Arial", 8), key="KEY_terminate")],
+            [sg.Button("Run", size=(8, 1), font=("Arial", 8), key="KEY_run", disabled=False), 
+              sg.Button("Terminate", size=(8, 1), font=("Arial", 8), key="KEY_terminate", disabled=True)],
             [sg.Text("or Ctrl+R / Ctrl+T", font=("Arial", 8), text_color="white")],
             [sg.HorizontalSeparator()],
 
             [sg.Text("Modifier", font=("Arial", 9), text_color="white")],
-            [sg.Button("Data", size=(8, 1), font=("Arial", 8), key="KEY_main_data_modifier"),
-             sg.Button("Alias", size=(8, 1), font=("Arial", 8), key="KEY_main_alias_modifier")],
+            [sg.Button("Data", size=(8, 1), font=("Arial", 8), key="KEY_main_data_modifier", disabled=True),
+             sg.Button("Alias", size=(8, 1), font=("Arial", 8), key="KEY_main_alias_modifier", disabled=True)],
             [sg.HorizontalSeparator()], 
 
             [sg.Text("test test", font=("Arial", 8), text_color="blue")]
         ]
 
-        self.window = sg.Window("FFv0.3", main_window_layout, resizable=True, keep_on_top=True, finalize=True)
-        self.window.refresh()
+        # self.window = sg.Window("FFv0.3", main_window_layout, resizable=True, keep_on_top=True, finalize=True)
+        # self.window.refresh()
 
         # window init setting
         self.queue_ui: Queue = broadcaster.register('ui')
@@ -60,6 +61,8 @@ class UI_Handler(threading.Thread):
         '''starts the GUI program and show the window'''
         if not self.window_running:
             self.window_running = True
+            self.window = sg.Window("FFv0.3", self.main_window_layout, resizable=True, keep_on_top=True, finalize=True)
+            self.run_ui()
         else:
             raise Errors.ServiceStatusError('GUI status error')
         
@@ -68,6 +71,29 @@ class UI_Handler(threading.Thread):
         if self.window_running:
             self.window_running = False
             self.window.close()
+    
+    def start_listening_service(self):
+        '''starts the keyboard listening service, should be triggered when run/ctrl+r is pressed'''
+        if not self.listening_service_running:
+            self.listening_service_running = True
+            self.window['KEY_run'].update(disabled=True)
+            self.window['KEY_terminate'].update(disabled=False)
+            self.window['KEY_main_data_modifier'].update(disabled=False)
+            self.window['KEY_main_alias_modifier'].update(disabled=False)
+            # start keyboard listening from keyboard_handler level through news
+            self.send_message('start_keyboard_listening', '')
+
+    def stop_listening_service(self):
+        '''stops the keyboard listening sevice, should be triggered when terminate/ctrl+t is pressed'''
+        if self.listening_service_running:
+            self.listening_service_running = False
+            self.window['KEY_run'].update(disabled=False)
+            self.window['KEY_terminate'].update(disabled=True)
+            self.window['KEY_main_data_modifier'].update(disabled=True)
+            self.window['KEY_main_alias_modifier'].update(disabled=True)
+            # stop keyboard listening from keyboard_handler level through news
+            self.send_message('stop_keyboard_listening', '')
+
 
     # ui main thread
     def run_ui(self):
@@ -75,8 +101,6 @@ class UI_Handler(threading.Thread):
         
         while True:
             event, values = self.window.read()
-            # TODO: change ui_handler into new process, instead of thread, cause PySimpleGUI
-            # is not allowed running in a sub thread!
             
             try:
                 tmp_news = self.poll_messages()
@@ -84,29 +108,40 @@ class UI_Handler(threading.Thread):
                 tmp_news = None
 
             # send signals
-            # if event == xx: # ui butten to get ecp value
-            #     pass # send queue info
+
 
             # receive signals
-            if tmp_news and tmp_news['soruce'] == 'keyboard' and tmp_news['command'] == 'set_ecp_value':
+            if tmp_news and tmp_news['source'] == 'keyboard' and tmp_news['command'] == 'set_ecp_value':
                 # TODO: set ecp value on gui
                 pass
 
             # confirm/load config file related
             if event == 'KEY_main_data_modifier':
+                # every time the modifier is opened, listening function should suspend to avoid affecting basic copy/paste function
+                self.stop_listening_service() # TBD: this function demands further testing
                 self.popup_data_dict_modifier()
                 self.set_data_dict_content_to_data_handler() # sync the data_dict and key_dict with updates
+                self.start_listening_service() # keyboard_listening_service back online
             
             if event == 'KEY_main_alias_modifier':
+                # every time the modifier is opened, listening function should suspend to avoid affecting basic copy/paste function
+                self.stop_listening_service() # TBD: this function demands further testing
                 self.popup_alias_dict_modifier()
-                # self.set_key_dict_content_to_data_handler() # sync
-                pass
+                self.set_key_dict_content_to_data_handler() # sync
+                self.start_listening_service() # keyboard_listening_service back online
 
-            # terminate GUI program
-            if event == 'KEY_terminate' or event == sg.WINDOW_CLOSED:
-                self.stop_GUI()
+            # start keyboard_listening
+            if event == 'KEY_run' or (tmp_news and tmp_news['source'] == 'keyboard' and tmp_news['command'] == 'start_main_thread'):
+                sg.popup('test_listening_startup', keep_on_top=True)
+                print('test_listening_startup')
+                self.start_listening_service()
+            
+
+            # terminate keyboard_listening
+            if event == 'KEY_terminate' or (tmp_news and tmp_news['source'] == 'keyboard' and tmp_news['command'] == 'stop_main_thread'):
+                sg.popup('test_listening_stop', keep_on_top=True)
                 print('call stop_gui function and stop')
-                break
+                self.stop_listening_service()
  
 
             # mark queue task as done, as long as tmp_news is not None
@@ -176,7 +211,7 @@ class UI_Handler(threading.Thread):
         # for test only
         pass
 
-
+    # popup window functions
     def popup_data_dict_modifier(self):
         '''pop up a new data_dict modifier window'''
 
@@ -214,7 +249,7 @@ class UI_Handler(threading.Thread):
                     data_window.close()
                     break
                 else:
-                    response = sg.popup_yes_no("data not updated. continue to exit?", keep_on_top=True)
+                    response = sg.popup_yes_no("data not updated. continue to exit?", title='notice', keep_on_top=True)
                     if response == 'Yes' or response is None:
                         data_window.close()
                         break
@@ -247,8 +282,27 @@ class UI_Handler(threading.Thread):
                         sg.popup('Some character\'s key has empty value, please check', keep_on_top=True)
                         is_perfect_dict = False
                         break
-                
-                if is_perfect_dict: # then save the current dict into self.data_dict, and use queue sync to data_handler
+                if is_perfect_dict:
+                    # if new key is added, then write the new key into key_dict as well
+                    if self.key_dict.keys() == list(tmp_data_dict.values())[0].keys():
+                        pass
+                    else: # modification has been made to the keys, now the key-alias dict should be changed correspondingly
+                        sg.popup('key list changed. changing key-alias dict as well.', keep_on_top=True)
+                        tmp_key_dict = copy.deepcopy(self.key_dict) # cerate a operable replica dict
+                        for tmp_key in self.key_dict.keys():
+                            if tmp_key in list(tmp_data_dict.values())[0].keys():
+                                pass
+                            else:
+                                del tmp_key_dict[tmp_key] # delete keys which exists in key_dict but not in tmp_data_dict
+                        if set(list(tmp_data_dict.values())[0].keys()) - set(tmp_key_dict.keys()) is set():
+                            pass # now these two dicts have same key
+                        else: # there are still new key pairs added in tmp_data_dict
+                            for i in (set(list(tmp_data_dict.values())[0].keys()) - set(tmp_key_dict.keys())):
+                                tmp_key_dict[i] = [] # create new key-alias pair for each difference
+                        
+                        self.key_dict = tmp_key_dict # store the changes back into self.key_dict
+                    
+                    # then save the current dict into self.data_dict, and use queue sync to data_handler
                     self.data_dict = tmp_data_dict
                     sg.popup("data updated", keep_on_top=True)
                     
@@ -260,11 +314,13 @@ class UI_Handler(threading.Thread):
                     data_window["KEY_data_modifier_character"].update(values=list(tmp_data_dict.keys()))
             
             if event == "KEY_del_character" and selected_character:
-                del tmp_data_dict[selected_character]
-                selected_character = None
-                data_window["KEY_data_modifier_character"].update(values=list(tmp_data_dict.keys()))
-                data_window["KEY_data_modifier_key"].update(values=[])
-                data_window["KEY_data_modifier_value"].update("")
+                response = sg.popup_yes_no('delete character and all his/her keys?', keep_on_top=True)
+                if response == 'Yes':
+                    del tmp_data_dict[selected_character]
+                    selected_character = None
+                    data_window["KEY_data_modifier_character"].update(values=list(tmp_data_dict.keys()))
+                    data_window["KEY_data_modifier_key"].update(values=[])
+                    data_window["KEY_data_modifier_value"].update("")
             
             if event == "KEY_add_key":
                 new_key = sg.popup_get_text("new key:", keep_on_top=True)
@@ -275,12 +331,14 @@ class UI_Handler(threading.Thread):
                     data_window["KEY_data_modifier_key"].update(values=key)
             
             if event == "KEY_del_key" and selected_key:
-                key.remove(selected_key)
-                for person in tmp_data_dict:
-                    del tmp_data_dict[person][selected_key]
-                selected_key = None
-                data_window["KEY_data_modifier_key"].update(values=key)
-                data_window["KEY_data_modifier_value"].update("")
+                response = sg.popup_yes_no('delete this key for all characters?', keep_on_top=True)
+                if response == 'Yes':
+                    key.remove(selected_key)
+                    for person in tmp_data_dict:
+                        del tmp_data_dict[person][selected_key]
+                    selected_key = None
+                    data_window["KEY_data_modifier_key"].update(values=key)
+                    data_window["KEY_data_modifier_value"].update("")
 
     def popup_alias_dict_modifier(self):
         '''pop up a new key_dict modifier window'''
@@ -314,7 +372,7 @@ class UI_Handler(threading.Thread):
                     key_window.close()
                     break
                 else:
-                    response = sg.popup_yes_no("data not updated. continue to exit?", keep_on_top=True)
+                    response = sg.popup_yes_no("data not updated. continue to exit?", title='notice', keep_on_top=True)
                     if response == 'Yes' or response is None:
                         key_window.close()
                         break
@@ -374,18 +432,17 @@ class UI_Handler(threading.Thread):
         broadcaster.broadcast({'source': 'ui', 'command': command, 'content': content})
     
     def poll_messages(self):
-        """ues another way to check news list to avoid high calling"""
+        """ues another way to check news list to avoid high concurrency"""
         try:
             while not self.queue_ui.empty():
                 news = self.queue_ui.get_nowait()
                 # self.queue_ui.task_done()
         except queue.Empty:
-            pass
+            news = None
         return news
 
 
-
+# test code
 A = UI_Handler(r'C:\Users\86781\VS_Code_Project\form_filler_new\config.json')
 A.start_GUI()
-A.run_ui()
 pass

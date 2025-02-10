@@ -5,7 +5,7 @@ data_sheet = 'data'
 key_sheet = 'key'
 
 key_dict, data_dict = load_and_prehandle_xlsx(path, data_sheet, path, key_sheet)
-for values in key_dict.values():
-    for value in values:
-        print(value)
+# for values in key_dict.values():
+#     for value in values:
+#         print(value)
 pass

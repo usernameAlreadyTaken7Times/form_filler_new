@@ -16,11 +16,11 @@ class Application_Handler():
         keyboard_handler = Keyboard_Handler()
         self.keyboard_handler = keyboard_handler
 
+        ui_handler = UI_Handler(config_filepath)
+        self.ui_handler = ui_handler
+
         business_handler = Business_Handler()
         self.business_handler = business_handler
-        
-        ui_handler = UI_Handler()
-        self.ui_handler = ui_handler
         
         self.app_running = False
 
@@ -29,8 +29,9 @@ class Application_Handler():
         '''start the application, should be called when 'Ctrl+R' is pressed.'''
         if not self.app_running:
             self.app_running = True
-            self.keyboard_handler.run_keyboard_listening()
-            self.business_handler.run_business()
+            self.keyboard_handler.start_basic_service() # keyboard_handler's listening service should be triggered in ui_handler
+            self.business_handler.start_basic_service()
+            self.business_handler.start_business_service()
             self.ui_handler.start_GUI()
             self.ui_handler.run_ui() # other threads's starting signal are run function, while ui is the main thread
 
@@ -40,8 +41,14 @@ class Application_Handler():
         '''stop the application, should be called when 'Ctrl+T' is pressed.'''
         if self.app_running:
             self.app_running = False
-            self.keyboard_handler.stop_listening_service()
+            self.keyboard_handler.stop_basic_service()
             self.business_handler.stop_business_service
+            self.business_handler.stop_basic_service()
             self.ui_handler.stop_GUI()
 
 
+# test code
+config_path = r'C:\Users\86781\VS_Code_Project\form_filler_new\config.json'
+A = Application_Handler(config_path)
+A.start_application()
+pass

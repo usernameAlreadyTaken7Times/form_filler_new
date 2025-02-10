@@ -10,21 +10,42 @@ class Keyboard_Handler(threading.Thread):
     '''This Keyboard_Handler handles keyboard-related signals.
     It involves monitoring keyboard input shortcuts and answering to upper UI layer.'''
     def __init__(self):
+        self.basic_service = False
         self.keyboard_listening_service = False
         self.queue_keyboard: Queue = broadcaster.register('keyboard')
         
 
     # start/stop functions
+    def start_basic_service(self):
+        '''start keyboard_handler basic service'''
+        if not self.basic_service:
+            self.basic_service = True
+            threading.Thread(target=self.run_keyboard_listening, daemon=True).start()
+        else:
+            raise Errors.ServiceStatusError
+    
+    def stop_basic_service(self):
+        '''stop keyboard_handler basic service'''
+        if self.basic_service:
+            self.basic_service = False
+        else:
+            raise Errors.ServiceStatusError
+
+
     def start_listening_service(self):
         '''start keyboard listening service'''
-        if not self.keyboard_listening_service:
+        if not self.keyboard_listening_service and self.basic_service:
             self.keyboard_listening_service = True
-            threading.Thread(target=self.run_keyboard_listening, daemon=True).start()
+            
+        else:
+            raise Errors.ServiceStatusError
     
     def stop_listening_service(self):
         '''stop keyboard listening service'''
-        if self.keyboard_listening_service:
+        if self.keyboard_listening_service and self.basic_service:
             self.keyboard_listening_service = False
+        else:
+            raise Errors.ServiceStatusError
      
     # listening main thread
     def run_keyboard_listening(self):
@@ -40,6 +61,11 @@ class Keyboard_Handler(threading.Thread):
                 self.send_message('start_main_thread', '')
             elif keyboard.is_pressed('ctrl+t'):
                 self.send_message('stop_main_thread', '')
+
+            elif tmp_news and tmp_news['source'] == 'ui' and tmp_news['command'] == 'start_keyboard_listening':
+                self.start_listening_service()
+            elif tmp_news and tmp_news['source'] == 'ui' and tmp_news['command'] == 'stop_keyboard_listening':
+                self.stop_listening_service()
             
             elif keyboard.is_pressed('ctrl+c'): # copy shortcut, 
                 tmp_text = self.get_clipboard_content()
