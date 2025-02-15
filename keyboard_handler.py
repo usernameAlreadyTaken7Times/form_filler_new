@@ -4,6 +4,7 @@ from error_list import Errors
 from shared_queue import broadcaster
 import threading
 from queue import Queue # only for ide's static analysis
+from typing import Optional
 
 
 class Keyboard_Handler(threading.Thread):
@@ -13,10 +14,11 @@ class Keyboard_Handler(threading.Thread):
         self.basic_service = False
         self.keyboard_listening_service = False
         self.queue_keyboard: Queue = broadcaster.register('keyboard')
+        self.active_character: str = ''
         
 
     # start/stop functions
-    def start_basic_service(self):
+    def start_basic_service(self) -> None:
         '''start keyboard_handler basic service'''
         if not self.basic_service:
             self.basic_service = True
@@ -24,7 +26,7 @@ class Keyboard_Handler(threading.Thread):
         else:
             raise Errors.ServiceStatusError
     
-    def stop_basic_service(self):
+    def stop_basic_service(self) -> None:
         '''stop keyboard_handler basic service'''
         if self.basic_service:
             self.basic_service = False
@@ -32,7 +34,7 @@ class Keyboard_Handler(threading.Thread):
             raise Errors.ServiceStatusError
 
 
-    def start_listening_service(self):
+    def start_listening_service(self) -> None:
         '''start keyboard listening service'''
         if not self.keyboard_listening_service and self.basic_service:
             self.keyboard_listening_service = True
@@ -40,7 +42,7 @@ class Keyboard_Handler(threading.Thread):
         else:
             raise Errors.ServiceStatusError
     
-    def stop_listening_service(self):
+    def stop_listening_service(self) -> None:
         '''stop keyboard listening service'''
         if self.keyboard_listening_service and self.basic_service:
             self.keyboard_listening_service = False
@@ -48,37 +50,50 @@ class Keyboard_Handler(threading.Thread):
             raise Errors.ServiceStatusError
      
     # listening main thread
-    def run_keyboard_listening(self):
+    def run_keyboard_listening(self) -> None:
         '''keyboard listening main thread, should running in background'''
+
+        # define shortcuts
+        keyboard.add_hotkey("ctrl+r",
+                             lambda: self.send_message('start_main_thread', ''), suppress=False)
+        keyboard.add_hotkey("ctrl+t",
+                             lambda: self.send_message('stop_main_thread', ''), suppress=False)
+        keyboard.add_hotkey("ctrl+c",
+                             lambda: self.get_ecp_value() if self.keyboard_listening_service else None, suppress=False)
+        keyboard.add_hotkey("up",
+                             lambda: self.switch_character(1) if self.keyboard_listening_service else None, suppress=False)
+        keyboard.add_hotkey("down",
+                             lambda: self.switch_character(-1) if self.keyboard_listening_service else None, suppress=False)
+        keyboard.add_hotkey("left",
+                             lambda: self.switch_key(-1) if self.keyboard_listening_service else None, suppress=False)
+        keyboard.add_hotkey("right",
+                             lambda: self.switch_key(1) if self.keyboard_listening_service else None, suppress=False)
+
         while True:
             try:
                 tmp_news = self.queue_keyboard.get(timeout=0.3)
+                self.queue_keyboard.task_done() # just assume the task done in this loop
+                print(f'[keyboard]: {tmp_news['command']} from {tmp_news['source']}\n')
+                pass
             except:
                 tmp_news = None
 
-            # send signals
-            if keyboard.is_pressed("ctrl+r"):
-                self.send_message('start_main_thread', '')
-            elif keyboard.is_pressed('ctrl+t'):
-                self.send_message('stop_main_thread', '')
-
-            elif tmp_news and tmp_news['source'] == 'ui' and tmp_news['command'] == 'start_keyboard_listening':
+            if tmp_news and tmp_news['source'] == 'ui' and tmp_news['command'] == 'start_keyboard_listening':
                 self.start_listening_service()
             elif tmp_news and tmp_news['source'] == 'ui' and tmp_news['command'] == 'stop_keyboard_listening':
                 self.stop_listening_service()
             
-            elif keyboard.is_pressed('ctrl+c'): # copy shortcut, 
-                tmp_text = self.get_clipboard_content()
-                self.send_message('get_ecp_value', tmp_text)
+            elif tmp_news and tmp_news['command'] == 'info_ecp_value':
+                self.set_clipboard_content(tmp_news['content'])
+
+            elif tmp_news and tmp_news['command'] == 'info_active_character':
+                self.character = tmp_news['content']
+
     
 
-            # mark queue task as done, as long as tmp_news is not None
-            if isinstance(tmp_news, Queue):
-                tmp_news.task_done()
 
-
-    # clipboard related read/write functions
-    def get_clipboard_content(self) -> str:
+    # clipboard related functions
+    def get_clipboard_content(self) -> Optional[str]:
         """get content from clipboard"""
         try:
             time.sleep(0.1)  # wait for clipboard refresh
@@ -88,15 +103,53 @@ class Keyboard_Handler(threading.Thread):
             print(f"Error loading flipboardcontent: {e}")
             return None
 
-    def set_clipboard_content(self, text: str):
+    def set_clipboard_content(self, text: str) -> None:
         '''set clipboard content from given string'''
         if text is not None:
             pyperclip.copy(text)
         else:
             raise KeyError
 
+
+    # keyboard-direction related functions
+    def switch_key(self, direction: int) -> None:
+        '''use this function to send cooresponding key switch message'''
+        if direction not in [-1, 1]:
+            raise Errors.KeyNotFoundError('wrong direction in key selection')
+        elif direction == 1:
+            self.send_message('switch_key_right', '')
+        else:
+            self.send_message('switch_key_left', '')
+
+    def switch_character(self, direction: int) -> None:
+        '''use this function to send cooresponding character switch message'''
+        if direction not in [-1, 1]:
+            raise Errors.KeyNotFoundError('wrong direction in character selection')
+        elif direction == 1:
+            self.send_message('switch_character_up', '')
+        else:
+            self.send_message('switch_character_down', '')
+
+
+    # ecp related signals/functions
+    def get_ecp_character_signal(self) -> None:
+        ''''send signal to queue for active character'''
+        self.send_message('get_active_character', '')
+
+
+
+    def get_ecp_content_signal(self, text: str, character: str) -> None: 
+        '''send signal to queue for ecp content'''
+        self.send_message('get_ecp_value', (text, character))
+
+    def get_ecp_value(self) -> None:
+        '''get ecp value from queue'''
+        self.get_ecp_character_signal()
+        copy_text = self.get_clipboard_content()
+        self.get_ecp_content_signal(copy_text, self.active_character)
+
     
     # comm function
-    def send_message(self, command: str, content: str):
+    def send_message(self, command: str, content: str) -> None:
         '''send a message from keyboard subfunction to broadcast queue'''
         broadcaster.broadcast({'source': 'keyboard', 'command': command, 'content': content})

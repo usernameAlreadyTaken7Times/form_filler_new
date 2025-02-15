@@ -11,7 +11,7 @@ import threading
 class Application_Handler():
     '''This application class is in the highest layer.
     It controls UI, keyboard and business classes.'''
-    def __init__(self, config_filepath: str): # TBD: determine where to get config file path (hard-coded or choose box from UI)
+    def __init__(self, config_filepath: str) -> None: # TBD: determine where to get config file path (hard-coded or choose box from UI)
         
         keyboard_handler = Keyboard_Handler()
         self.keyboard_handler = keyboard_handler
@@ -25,7 +25,7 @@ class Application_Handler():
         self.app_running = False
 
     # switch on/off the application, including the keyboard & business module
-    def start_application(self):
+    def start_application(self) -> None:
         '''start the application, should be called when 'Ctrl+R' is pressed.'''
         if not self.app_running:
             self.app_running = True
@@ -37,12 +37,12 @@ class Application_Handler():
 
 
     
-    def stop_application(self):
+    def stop_application(self) -> None:
         '''stop the application, should be called when 'Ctrl+T' is pressed.'''
         if self.app_running:
             self.app_running = False
             self.keyboard_handler.stop_basic_service()
-            self.business_handler.stop_business_service
+            self.business_handler.stop_business_service()
             self.business_handler.stop_basic_service()
             self.ui_handler.stop_GUI()
 

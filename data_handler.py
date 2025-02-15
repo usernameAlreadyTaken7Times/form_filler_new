@@ -20,7 +20,7 @@ def load_and_prehandle_xlsx(data_path: str, data_sheet: str, key_path: str, key_
     df_key.fillna('', inplace=True) # fill all missing alias
     key_dict = df_key.set_index(df_key.columns[0]).T.to_dict('list')
     for key in key_dict:
-        for i in range(len(key_dict[key])):
+        for _ in range(len(key_dict[key])):
             if key_dict[key][-1] == '':
                 key_dict[key] = key_dict[key][:-1]
             else:
@@ -36,7 +36,7 @@ def load_and_prehandle_xlsx(data_path: str, data_sheet: str, key_path: str, key_
     }
     return key_dict, data_dict
 
-def write_xlsx(key_dict: dict, data_dict: dict):
+def write_xlsx(key_dict: dict, data_dict: dict) -> None:
     '''Write the dicts in Data_Handler back to the .xlsx file. Should be called when terminating the program.'''
     # TODO: the function to write data_dict and key_dict back to .xlsx file after using the app.
     pass
@@ -46,7 +46,7 @@ class Data_Handler():
     '''This class works as a database during the program running, and is called by Data_Handler.
         Functions in it are called to modify the data inside database only.'''
     # init
-    def __init__(self):
+    def __init__(self) -> None:
         '''database_dict should contain the path and sheet name of data_sheet and key_sheet.'''
         self.data_path = ConfigSingleton.get_data_dict_config()[0]
         self.data_sheetname = ConfigSingleton.get_data_dict_config()[1]
@@ -56,7 +56,7 @@ class Data_Handler():
         self.data_loaded = False
 
         self.data_dict: dict[str, dict]
-        self.key_dict: dict[str, str]
+        self.key_dict: dict[str, list]
         self.data_dict = {}
         self.key_dict = {}
 
@@ -64,7 +64,7 @@ class Data_Handler():
         self.check_data_validity()
 
     # init check
-    def check_data_validity(self):
+    def check_data_validity(self) -> None:
         '''This function checks weather the loaded dicts(value_dict&key_dict) are valid, 
         for example, weather they have the same keys. If not, throw out a RowdataError.
         If there are any replicates in key_dict, it repairs them.'''
@@ -106,12 +106,12 @@ class Data_Handler():
 
 
     # io
-    def load_data_xlsx(self):
+    def load_data_xlsx(self) -> None:
         '''load data_dict and key_dict from .xlsx file'''
         self.key_dict, self.data_dict = load_and_prehandle_xlsx(self.data_path, self.data_sheetname, self.key_path, self.key_sheetname)
         self.data_loaded = True
 
-    def write_data_xlsx(self):
+    def write_data_xlsx(self) -> None:
         '''write data_dict and key_dict back to .xlsx file'''
         write_xlsx(self.key_dict, self.data_dict)
         self.data_loaded = False
@@ -129,7 +129,7 @@ class Data_Handler():
         '''retuen the value based on the given key'''
         return self.data_dict[person][key]
 
-    def add_empty_key_value_pair(self, person: str, key: str):
+    def add_empty_key_value_pair(self, person: str, key: str) -> None:
         '''add a new empty key-value pair for the given person, modify both data sheets(value_dict & key_dict).\n
         default value=None. '''
         if key not in self.data_dict[person].keys():
@@ -141,7 +141,7 @@ class Data_Handler():
         else:
             raise Errors.OverwriteError("You are trying to rewrite the value stored in the dict.")
     
-    def del_key_value_pair(self, person: str, key: str):
+    def del_key_value_pair(self, person: str, key: str) -> None:
         '''delete an existing key-value pair for all people, modify both data sheets(value_dict & key_dict).'''
         if self.has_key(person, key):
             for key_name in self.data_dict.keys():
@@ -150,14 +150,14 @@ class Data_Handler():
         else:
             raise KeyError
 
-    def set_value_from_key_value_pair(self, person: str, key, new_value: str):
+    def set_value_from_key_value_pair(self, person: str, key, new_value: str) -> None:
         '''change the given key-value pair's value into new value.\n
         Noted: This function should only be called after a new key-value pair is created.
         This function assumes the person does exist.'''
         if key in self.data_dict[person].keys():
             self.data_dict[person][key] = new_value
 
-    def add_empty_person(self, new_person: str):
+    def add_empty_person(self, new_person: str) -> None:
         '''add a new person in the data_dict'''
         if new_person not in self.data_dict.keys():
             self.data_dict[new_person] = self.data_dict[list(self.data_dict.keys())[0]] # copy the parameter from the first character
@@ -166,7 +166,7 @@ class Data_Handler():
         else:
             raise Errors.NoMatchError('Error chosing person.')
 
-    def del_person(self, del_person: str):
+    def del_person(self, del_person: str) -> None:
         '''delete a person from data_dict'''
         if del_person not in self.data_dict.keys():
             raise Errors.NoMatchError('Error chosing person.')
@@ -209,7 +209,7 @@ class Data_Handler():
         else:
             raise KeyError
             
-    def add_alias_for_existing_key(self, key_name: str, alias_name: str):
+    def add_alias_for_existing_key(self, key_name: str, alias_name: str) -> None:
         '''add an alias for existing key, modify the key sheet,
         to ensure the key does exist in two dicts and the given alias is not already there.'''
         if self.has_key(key_name): # test if key valid
@@ -220,7 +220,7 @@ class Data_Handler():
         else:
             raise KeyError
 
-    def del_alias_for_existing_key(self, key_name: str, alias_name: str):
+    def del_alias_for_existing_key(self, key_name: str, alias_name: str) -> None:
         '''delete an alias for existing key, modify the key sheet,
         to ensure the key does exist in two dicts and the given alias is not already there.'''
         if self.has_key(key_name): # test if key valid
