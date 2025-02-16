@@ -36,10 +36,33 @@ def load_and_prehandle_xlsx(data_path: str, data_sheet: str, key_path: str, key_
     }
     return key_dict, data_dict
 
-def write_xlsx(key_dict: dict, data_dict: dict) -> None:
+def write_xlsx(key_dict: dict, data_dict: dict,
+               data_path: str, data_sheet: str, key_path: str, key_sheet: str) -> None:
     '''Write the dicts in Data_Handler back to the .xlsx file. Should be called when terminating the program.'''
     # TODO: the function to write data_dict and key_dict back to .xlsx file after using the app.
-    pass
+
+    key_list = []
+    max_length = max(len(v) for v in key_dict.values()) if key_dict else 0
+    for key, values in key_dict.items():
+        while len(values) < max_length:
+            values.append('')
+        key_list.append([key] + values)
+
+    df_key = pd.DataFrame(key_list)
+    df_key.fillna('', inplace=True)
+
+    header_row = ["keys"] + [""] * (df_key.shape[1] - 1)
+    df_key = pd.concat([pd.DataFrame([header_row]), df_key], ignore_index=True)
+
+    df_data = pd.DataFrame.from_dict(data_dict, orient='index')
+
+    df_key = df_key.map(lambda x: x.replace('_x000D_\n', '').strip() if isinstance(x, str) else x)
+    df_data = df_data.map(lambda x: x.replace('_x000D_\n', '').strip() if isinstance(x, str) else x)
+
+    with pd.ExcelWriter(key_path) as writer:
+        df_key.to_excel(writer, sheet_name=key_sheet, index=False, header=False)
+        df_data.to_excel(writer, sheet_name=data_sheet, index=False)
+
 
 
 class Data_Handler():
@@ -113,7 +136,8 @@ class Data_Handler():
 
     def write_data_xlsx(self) -> None:
         '''write data_dict and key_dict back to .xlsx file'''
-        write_xlsx(self.key_dict, self.data_dict)
+        print('test write data xlsx')
+        write_xlsx(self.key_dict, self.data_dict, self.data_path, self.data_sheetname, self.key_path, self.key_sheetname)
         self.data_loaded = False
 
 
@@ -204,7 +228,7 @@ class Data_Handler():
     
     def key_has_given_alias(self, key_name: str, alias_name: str) -> bool:
         '''Return weather the given key has the given alias.'''
-        if self.has_key(key_name): # test if key valid
+        if key_name in self.key_dict.keys(): # test if key valid
             return True if alias_name in self.key_dict[key_name] else False
         else:
             raise KeyError

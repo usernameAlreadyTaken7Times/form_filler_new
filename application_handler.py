@@ -37,14 +37,14 @@ class Application_Handler():
 
 
     
-    def stop_application(self) -> None:
-        '''stop the application, should be called when 'Ctrl+T' is pressed.'''
-        if self.app_running:
-            self.app_running = False
-            self.keyboard_handler.stop_basic_service()
-            self.business_handler.stop_business_service()
-            self.business_handler.stop_basic_service()
-            self.ui_handler.stop_GUI()
+    # def stop_application(self) -> None:
+    #     '''stop the application, should be called when 'Ctrl+T' is pressed.'''
+    #     if self.app_running:
+    #         self.app_running = False
+    #         self.keyboard_handler.stop_basic_service()
+    #         self.business_handler.stop_business_service()
+    #         self.business_handler.stop_basic_service()
+    #         self.ui_handler.stop_GUI()
 
 
 # test code

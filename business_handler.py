@@ -97,6 +97,8 @@ class Business_Handler(threading.Thread):
             # receive signals
             if tmp_news and tmp_news['source'] == 'ui' and tmp_news['command'] == 'get_dicts':
                 self.send_dicts()
+            elif tmp_news and tmp_news['source'] == 'keyboard' and tmp_news['command'] == 'get_default_parameter':
+                self.send_default_parameter()
             
             elif tmp_news and tmp_news['source'] == 'ui' and tmp_news['command'] == 'set_dicts':
                 self.data_handler.data_dict, self.data_handler.key_dict = tmp_news['content']
@@ -109,11 +111,17 @@ class Business_Handler(threading.Thread):
             
             elif tmp_news and tmp_news['command'] == 'get_ecp_value':
                 tmp_text, character = tmp_news['content']
-                tmp_return_value = self.get_ecp_value(tmp_text, character)
+                tmp_return_value, tmp_return_alias= self.get_ecp_value(tmp_text, character)
                 if tmp_return_value:
-                    self.send_message('info_ecp_value', tmp_return_value)
+                    self.send_message('info_ecp_value', (tmp_return_value, tmp_return_alias))
                 else: # return value is '', means no key/alias is match the input
                     self.send_message('no_info_value_found', '')
+            
+            elif tmp_news and tmp_news['command'] == 'stop_service':
+                self.data_handler.write_data_xlsx()
+                self.stop_business_service()
+                self.stop_basic_service()
+                break
 
 
 
@@ -241,6 +249,10 @@ class Business_Handler(threading.Thread):
         '''send data_dict and key_dict to the queue'''
         self.send_message('send_dicts', (self.data_handler.data_dict, self.data_handler.key_dict))
 
+    def send_default_parameter(self) -> None:
+        '''send the first character and key for keyboard's self_active_character when init'''
+        self.send_message('send_default_parameter', (list(self.data_handler.data_dict.keys())[0], list(self.data_handler.key_dict.keys())[0]))
+
     def send_message(self, command: str, content: str) -> None:
         '''send a message from business subfunction to broadcast queue'''
         broadcaster.broadcast({'source': 'business', 'command': command, 'content': content})
@@ -249,7 +261,6 @@ class Business_Handler(threading.Thread):
 
     # get key value function
     def get_ecp_value(self, text: str, character: str) -> str:
-        # TBD: finish logic
         '''return the value from data_dict of data_handler(if exist),
         should be called when 'Ctrl+C' are pressed or equivalent activity'''
         if not self.get_business_service_status():
@@ -258,18 +269,18 @@ class Business_Handler(threading.Thread):
         if text in self.key_list: # success found in key-value pair
             self.active_key = text
             self.active_key_index = self.key_list.index(self.active_key)
-            self.active_value = self.data_handler.get_value_from_key(self.active_character, self.active_key)
-            return self.active_value
+            self.active_value = self.data_handler.get_value_from_key(character, self.active_key)
+            return self.active_value, ''
         else:
             key = self.data_handler.find_key_from_alias(text)
             if key is not None: # success found in alias, in key-value pairs with corresponding key
                 self.active_key = key
                 self.active_alias = text
                 self.active_key_index = self.key_list.index(self.active_key)
-                self.active_value = self.data_handler.get_value_from_key(self.active_character, self.active_key)
-                return self.active_value
+                self.active_value = self.data_handler.get_value_from_key(character, self.active_key)
+                return self.active_value, key
         
             # neither in key-value pairs nor in alias
-            return None
+            return None, ''
         
 

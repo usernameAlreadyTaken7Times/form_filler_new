@@ -15,6 +15,7 @@ class Keyboard_Handler(threading.Thread):
         self.keyboard_listening_service = False
         self.queue_keyboard: Queue = broadcaster.register('keyboard')
         self.active_character: str = ''
+        self.active_key: str = ''
         
 
     # start/stop functions
@@ -38,6 +39,8 @@ class Keyboard_Handler(threading.Thread):
         '''start keyboard listening service'''
         if not self.keyboard_listening_service and self.basic_service:
             self.keyboard_listening_service = True
+
+            self.active_character, self.active_key = self.get_default_parameter()
             
         else:
             raise Errors.ServiceStatusError
@@ -84,12 +87,34 @@ class Keyboard_Handler(threading.Thread):
                 self.stop_listening_service()
             
             elif tmp_news and tmp_news['command'] == 'info_ecp_value':
-                self.set_clipboard_content(tmp_news['content'])
+                self.set_clipboard_content(tmp_news['content'][0])
 
             elif tmp_news and tmp_news['command'] == 'info_active_character':
-                self.character = tmp_news['content']
-
-    
+                self.active_character = tmp_news['content']
+            elif tmp_news and tmp_news['command'] == 'info_active_key':
+                self.active_key = tmp_news['content']
+            elif tmp_news and tmp_news['command'] == 'info_update_value':
+                self.set_clipboard_content(tmp_news['content'])
+            elif tmp_news and tmp_news['command'] == 'stop_service':
+                self.stop_basic_service()
+                break
+            
+    # thread init related function
+    def get_default_parameter(self) -> None:
+        '''create a tmp receive channel for default character when init'''
+        self.send_message('get_default_parameter', '')
+        while True:
+            try:
+                tmp_news = self.queue_keyboard.get(timeout=0.3)
+                print(f'[keyboard_init]: {tmp_news['command']} from {tmp_news['source']}\n')
+            except:
+                tmp_news = None
+            
+            if tmp_news and tmp_news['source'] == 'business' and tmp_news['command'] == 'send_default_parameter':
+                default_character, default_key = tmp_news['content']
+                break
+        
+        return default_character, default_key
 
 
     # clipboard related functions
@@ -132,19 +157,12 @@ class Keyboard_Handler(threading.Thread):
 
 
     # ecp related signals/functions
-    def get_ecp_character_signal(self) -> None:
-        ''''send signal to queue for active character'''
-        self.send_message('get_active_character', '')
-
-
-
     def get_ecp_content_signal(self, text: str, character: str) -> None: 
         '''send signal to queue for ecp content'''
         self.send_message('get_ecp_value', (text, character))
 
     def get_ecp_value(self) -> None:
         '''get ecp value from queue'''
-        self.get_ecp_character_signal()
         copy_text = self.get_clipboard_content()
         self.get_ecp_content_signal(copy_text, self.active_character)
 

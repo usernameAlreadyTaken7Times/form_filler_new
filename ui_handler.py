@@ -50,23 +50,29 @@ class UI_Handler(threading.Thread):
 
             [sg.Text("Modifier", font=("Arial", 10, "bold", "underline"), text_color="white")],
             [sg.Button("Data", size=(8, 1), font=("Arial", 8),
-                        key="KEY_main_data_modifier", tooltip=" view data-key-value dictionary ", disabled=True),
+                        key="KEY_main_data_modifier", tooltip=" view and edit data-key-value dictionary ", disabled=True),
              sg.Button("Alias", size=(8, 1), font=("Arial", 8),
-                        key="KEY_main_alias_modifier", tooltip=" view key-alias dictionary ", disabled=True)],
+                        key="KEY_main_alias_modifier", tooltip=" view and edit key-alias dictionary ", disabled=True)],
             [sg.HorizontalSeparator()], 
 
             [sg.Text("Clipboard cache:", font=("Arial", 10, "bold", "underline"), text_color="white")],
-            [sg.Text("character:", font=("Arial", 9, "italic", "underline"), text_color="white")],
+            [sg.Text("character:", font=("Arial", 9, "italic", "underline"),
+                     tooltip=" use up/down arrow key to switch ", text_color="white")],
             [sg.Text(" --- ", key="TEXT_active_character",
+                      tooltip=" the character's name ",
                       font=("Arial", 10), text_color="gold", enable_events=True)],
-            [sg.Text("key:", font=("Arial", 9, "italic", "underline"), text_color="white")],
+            [sg.Text("key:", font=("Arial", 9, "italic", "underline"),
+                     tooltip=" use left/right arrow key to switch ", text_color="white")],
             [sg.Text(" --- ", key="TEXT_active_key",
+                      tooltip=" the character's attribute ",
                       font=("Arial", 10), text_color="gold", enable_events=True)],
             [sg.Text("alias (if exist):", font=("Arial", 9, "italic", "underline"), text_color="white")],
             [sg.Text(" --- ", key="TEXT_active_alias",
+                      tooltip=" attribute's alias, only available when text field matches ",
                       font=("Arial", 10), text_color="gold", enable_events=True)],
             [sg.Text("value:", font=("Arial", 9, "italic", "underline"), text_color="white")],
             [sg.Text(" --- ", key="TEXT_active_value",
+                      tooltip=" the attribute's value ",
                       font=("Arial", 10), text_color="gold", enable_events=True)],
             [sg.HorizontalSeparator()],
 
@@ -97,6 +103,7 @@ class UI_Handler(threading.Thread):
         if self.window_running:
             self.window_running = False
             self.set_dicts_content_to_data_handler() # write the dicts back to data_handler
+            self.send_message('stop_service', '')
             self.window.close()
         else:
             raise Errors.ServiceStatusError('GUI status error(already closed)')
@@ -166,7 +173,25 @@ class UI_Handler(threading.Thread):
 
             # receive signals
             if tmp_news and tmp_news['command'] == 'info_ecp_value':
-                self.window['TEXT_active_value'].update(tmp_news['content'])
+                if len(tmp_news['content'][0]) >= 12:
+                    self.window['TEXT_active_value'].update(tmp_news['content'][0][:11]+'…')
+                else:
+                    self.window['TEXT_active_value'].update(tmp_news['content'][0])
+                if len(tmp_news['content']) == 2: # then has an alias
+                    self.window['TEXT_active_alias'].update(tmp_news['content'][1])
+                else:
+                    self.window['TEXT_active_alias'].update(' --- ')
+            elif tmp_news and tmp_news['command'] == 'no_info_value_found':
+                return_response = sg.popup_yes_no("no match key or alias. create one?", keep_on_top=True)
+                if return_response == 'Yes':
+                    self.stop_listening_service()
+                    self.popup_data_dict_modifier()
+                    self.set_data_dict_content_to_data_handler() # sync the data_dict and key_dict with updates
+                    self.set_key_dict_content_to_data_handler() # it's possible when key-alias changes toghther
+                    self.start_listening_service() # keyboard_listening_service back online
+                elif return_response == 'No' or return_response is None:
+                    pass
+
             elif tmp_news and tmp_news['command'] == 'get_active_character':
                 self.send_message('info_active_character', self.active_character)
             # if tmp_news and tmp_news['source'] == 'business' and tmp_news['command'] == 'send_dicts':
@@ -178,28 +203,52 @@ class UI_Handler(threading.Thread):
                     self.active_key_index = 0
                 self.active_key = self.key_list[self.active_key_index]
                 self.window['TEXT_active_key'].update(self.active_key)
-                self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key])
+                if len(self.data_dict[self.active_character][self.active_key]) >= 12:
+                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key][:11]+'…')
+                else:
+                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key])
+                self.window['TEXT_active_alias'].update(' --- ')
+                self.update_key()
+                self.update_value(self.data_dict[self.active_character][self.active_key])
             elif tmp_news and tmp_news['command'] == 'switch_key_left':
                 self.active_key_index -= 1
                 if self.active_key_index == -1:
                     self.active_key_index = len(self.key_list)-1
                 self.active_key = self.key_list[self.active_key_index]
                 self.window['TEXT_active_key'].update(self.active_key)
-                self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key])
-            elif tmp_news and tmp_news['command'] == 'switch_character_up':
+                if len(self.data_dict[self.active_character][self.active_key]) >= 12:
+                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key][:11]+'…')
+                else:
+                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key])
+                self.window['TEXT_active_alias'].update(' --- ')
+                self.update_key()
+                self.update_value(self.data_dict[self.active_character][self.active_key])
+            elif tmp_news and tmp_news['command'] == 'switch_character_down': # why dows 'down' mean next instead of last? 
                 self.active_character_index += 1
                 if self.active_character_index == len(self.character_list):
                     self.active_character_index = 0
                 self.active_character = self.character_list[self.active_character_index]
                 self.window['TEXT_active_character'].update(self.active_character)
-                self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key])
-            elif tmp_news and tmp_news['command'] == 'switch_character_down':
+                if len(self.data_dict[self.active_character][self.active_key]) >= 12:
+                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key][:11]+'…')
+                else:
+                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key])
+                self.window['TEXT_active_alias'].update(' --- ')
+                self.update_character()
+                self.update_value(self.data_dict[self.active_character][self.active_key])
+            elif tmp_news and tmp_news['command'] == 'switch_character_up':
                 self.active_character_index -= 1
                 if self.active_character_index == -1:
                     self.active_character_index = len(self.character_list)-1
                 self.active_character = self.character_list[self.active_character_index]
                 self.window['TEXT_active_character'].update(self.active_character)
-                self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key])
+                if len(self.data_dict[self.active_character][self.active_key]) >= 12:
+                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key][:11]+'…')
+                else:
+                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key])
+                self.window['TEXT_active_alias'].update(' --- ')
+                self.update_character()
+                self.update_value(self.data_dict[self.active_character][self.active_key])
 
             # confirm/load config file related
             elif event == 'KEY_main_data_modifier':
@@ -208,6 +257,7 @@ class UI_Handler(threading.Thread):
                 self.stop_listening_service()
                 self.popup_data_dict_modifier()
                 self.set_data_dict_content_to_data_handler() # sync the data_dict and key_dict with updates
+                self.set_key_dict_content_to_data_handler() # it's possible when key-alias changes toghther
                 self.start_listening_service() # keyboard_listening_service back online
             
             elif event == 'KEY_main_alias_modifier':
@@ -236,11 +286,15 @@ class UI_Handler(threading.Thread):
                 else:
                     sg.popup('listening service already terminated', keep_on_top=True)
                     print('try to terminate again')
- 
+            elif event == sg.WINDOW_CLOSED:
+                self.stop_listening_service()
+                self.stop_GUI()
+                sg.popup('service exit')
+                break
 
 
     # thread related functions
-    def get_dicts_content_from_data_handler(self) -> tuple[dict, dict]: # TODO: Separate receiving end
+    def get_dicts_content_from_data_handler(self) -> tuple[dict, dict]: 
         '''use queue to request data_dict and key_dict from data_handler, should only be called by init'''
         self.send_message('get_dicts', '')
         while True:
@@ -283,8 +337,8 @@ class UI_Handler(threading.Thread):
 
         tmp_data_dict: dict[str, dict]
         tmp_data_dict = copy.deepcopy(self.data_dict) # create a deepcopy of data_dict for in-function use
-        selected_character = None
-        selected_key = None
+        selected_character = list(tmp_data_dict.keys())[0]
+        selected_key = list(tmp_data_dict[selected_character].keys())[0]
         key = list(next(iter(tmp_data_dict.values())).keys())
 
         # popup data_dict modifier window layout
@@ -306,6 +360,10 @@ class UI_Handler(threading.Thread):
         data_window = sg.Window('data_dict modifier', popup_data_window_layout, keep_on_top=True, finalize=True)
         data_window.force_focus()
 
+        data_window['KEY_data_modifier_character'].update(set_to_index=[0])
+        data_window['KEY_data_modifier_key'].update(set_to_index=[0])
+        data_window["KEY_data_modifier_value"].update(tmp_data_dict[selected_character][selected_key])
+
         # run loop
         while True:
             event, values = data_window.read()
@@ -319,15 +377,19 @@ class UI_Handler(threading.Thread):
                     if response == 'Yes' or response is None:
                         data_window.close()
                         break
-            
-            if event == "KEY_data_modifier_character":
+            elif len(key) == 0:
+                # key list is empty, can cause many problem
+                sg.popup("key_list is empty, please add content to it", keep_on_top=True)
+
+
+
+
+            elif event == "KEY_data_modifier_character":
                 selected_character = values["KEY_data_modifier_character"][0] if values["KEY_data_modifier_character"] else None
                 if selected_character:
-                    data_window["KEY_data_modifier_key"].update(values=key)
-                    selected_key = None
-                    data_window["KEY_data_modifier_value"].update("")
+                    data_window["KEY_data_modifier_value"].update(tmp_data_dict[selected_character][selected_key])
             
-            if event == "KEY_data_modifier_key" and selected_character:
+            elif event == "KEY_data_modifier_key" and selected_character:
                 selected_key = values["KEY_data_modifier_key"][0] if values["KEY_data_modifier_key"] else None
                 if selected_key:
                     data_window["KEY_data_modifier_value"].update(tmp_data_dict[selected_character][selected_key])
@@ -383,18 +445,27 @@ class UI_Handler(threading.Thread):
                 response = sg.popup_yes_no('delete character and all his/her keys?', keep_on_top=True)
                 if response == 'Yes':
                     del tmp_data_dict[selected_character]
-                    selected_character = None
-                    data_window["KEY_data_modifier_character"].update(values=list(tmp_data_dict.keys()))
-                    data_window["KEY_data_modifier_key"].update(values=[])
-                    data_window["KEY_data_modifier_value"].update("")
+                    if len(tmp_data_dict) > 0:
+                        selected_character = list(tmp_data_dict.keys())[0]
+                        
+                        data_window["KEY_data_modifier_character"].update(values=list(tmp_data_dict.keys()),
+                                                     set_to_index=[list(tmp_data_dict.keys()).index(selected_character)])
+                        # data_window["KEY_data_modifier_key"].update(values=[])
+                        data_window["KEY_data_modifier_value"].update(tmp_data_dict[selected_character][selected_key])
+                    else:
+                        sg.popup('no character left. please add a character', keep_on_top=True)
             
+            elif event == "KEY_del_character" and not selected_character:
+                sg.popup("please choose a character to delete", keep_on_top=True)
+
             if event == "KEY_add_key":
                 new_key = sg.popup_get_text("new key:", keep_on_top=True)
                 if new_key and new_key not in key:
                     key.append(new_key)
                     for person in tmp_data_dict:
                         tmp_data_dict[person][new_key] = ""
-                    data_window["KEY_data_modifier_key"].update(values=key)
+                    selected_key = new_key
+                    data_window["KEY_data_modifier_key"].update(values=key, set_to_index=[key.index(selected_key)])
             
             if event == "KEY_del_key" and selected_key:
                 response = sg.popup_yes_no('delete this key for all characters?', keep_on_top=True)
@@ -402,17 +473,25 @@ class UI_Handler(threading.Thread):
                     key.remove(selected_key)
                     for person in tmp_data_dict:
                         del tmp_data_dict[person][selected_key]
-                    selected_key = None
-                    data_window["KEY_data_modifier_key"].update(values=key)
-                    data_window["KEY_data_modifier_value"].update("")
+                    if len(key) == 0:
+                        selected_key = None
+                        data_window["KEY_data_modifier_key"].update(values=key)
+                        data_window["KEY_data_modifier_value"].update("")
+                    else:
+                        selected_key = key[0]
+                        data_window["KEY_data_modifier_key"].update(values=key, set_to_index=[key.index(selected_key)])
+                        data_window["KEY_data_modifier_value"].update(tmp_data_dict[selected_character][selected_key])
+
+            elif event == "KEY_del_key" and not selected_key:
+                sg.popup("please choose a key to delete", keep_on_top=True)
 
     def popup_alias_dict_modifier(self) -> None:
         '''pop up a new key_dict modifier window'''
 
         tmp_key_dict: dict[str, list]
         tmp_key_dict = copy.deepcopy(self.key_dict) # create a copy of key_dict for in-function use
-        selected_key = None
-        selected_alias = None
+        selected_key = list(tmp_key_dict.keys())[0]
+        selected_alias = (tmp_key_dict[selected_key][0] if len(tmp_key_dict[selected_key])>0 else None)
 
         # popup key_dict modifier window layout
         popup_key_window_layout = [
@@ -428,6 +507,9 @@ class UI_Handler(threading.Thread):
         
         key_window = sg.Window('key_dict modifier', popup_key_window_layout, keep_on_top=True, finalize=True)
         key_window.force_focus()
+
+        key_window['KEY_alias_modifier_key'].update(set_to_index=[0])
+        key_window['KEY_alias_modifier_alias'].update(set_to_index=[0])
 
         # run loop
         while True:
@@ -447,7 +529,12 @@ class UI_Handler(threading.Thread):
             if event == "KEY_alias_modifier_key":
                 selected_key = values["KEY_alias_modifier_key"][0] if values["KEY_alias_modifier_key"] else None
                 if selected_key:
-                    key_window["KEY_alias_modifier_alias"].update(values=tmp_key_dict[selected_key])
+                    if len(tmp_key_dict[selected_key]) == 0:
+                        key_window["KEY_alias_modifier_alias"].update(values=tmp_key_dict[selected_key])
+                        selected_alias = None
+                    else:
+                        key_window["KEY_alias_modifier_alias"].update(values=tmp_key_dict[selected_key], set_to_index=[0])
+                        selected_alias = tmp_key_dict[selected_key][0]
             
             if event == "KEY_alias_modifier_alias":
                 selected_alias = values["KEY_alias_modifier_alias"][0] if values["KEY_alias_modifier_alias"] else None
@@ -484,8 +571,13 @@ class UI_Handler(threading.Thread):
             
             if event == "KEY_del_alias" and selected_alias:
                 tmp_key_dict[selected_key].remove(selected_alias)
-                selected_alias = None
-                key_window["KEY_alias_modifier_alias"].update(values=tmp_key_dict[selected_key])
+                if len(tmp_key_dict[selected_key]) == 0:
+                    selected_alias = None
+                    key_window["KEY_alias_modifier_alias"].update(values=[])
+                else:
+                    selected_alias = tmp_key_dict[selected_key][0]
+                    key_window["KEY_alias_modifier_alias"].update(tmp_key_dict[selected_key],
+                                                 set_to_index=[tmp_key_dict[selected_key].index(selected_alias)])
             
             elif event == "KEY_del_alias" and not selected_alias:
                 sg.popup("please choose an alias to delete", keep_on_top=True)
@@ -506,6 +598,19 @@ class UI_Handler(threading.Thread):
                 return news
         except queue.Empty:
             return None
+
+    def update_character(self) -> None:
+        '''use this function to update active character with keyboard_handler'''
+        self.send_message('info_active_character', self.active_character)
+    
+    def update_key(self) -> None:
+        '''use this function to update active key with keyboard handler'''
+        self.send_message('info_active_key', self.active_key)
+
+    def update_value(self, value: str) -> None:
+        '''use this function to update active value with keyboard handler,
+        and this value then write to clipboard for paste'''
+        self.send_message('info_update_value', value)
 
 
 # # test code
