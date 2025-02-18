@@ -29,7 +29,8 @@ class ConfigSingleton():
                          'output_data_sheet_name',
                          'output_key_xlsx_filepath',
                          'output_key_sheet_name',
-                         'use_shortcuts']
+                         'use_shortcuts',
+                         'backup_xlsx_path']
         missing_keys = [key for key in required_keys if key not in config]
         if missing_keys:
             raise KeyError(f"Missing required config keys: {', '.join(missing_keys)}")
@@ -65,6 +66,11 @@ class ConfigSingleton():
     def get_output_key_dict_config(cls) -> tuple[str, str]:
         '''return the output key_dict filepath and sheet name'''
         return cls._config['output_key_xlsx_filepath'], cls._config['output_key_sheet_name']
+
+    @classmethod
+    def get_backup_xlsx_path(cls) -> str:
+        return cls._config['backup_xlsx_path']
+
 
     @unused
     @classmethod

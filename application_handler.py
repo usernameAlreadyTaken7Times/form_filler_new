@@ -5,7 +5,7 @@ from ui_handler import UI_Handler
 class Application_Handler():
     '''This application class is in the highest layer.
     It controls UI, keyboard and business classes.'''
-    def __init__(self, config_filepath: str) -> None: # TBD: determine where to get config file path (hard-coded or choose box from UI)
+    def __init__(self, config_filepath: str) -> None:
         
         keyboard_handler = Keyboard_Handler()
         self.keyboard_handler = keyboard_handler
@@ -28,10 +28,3 @@ class Application_Handler():
             self.business_handler.start_business_service()
             self.ui_handler.start_GUI()
             self.ui_handler.run_ui() # other threads's starting signal are run function, while ui is the main thread
-
-
-# # test code
-# config_path = r'C:\Users\86781\VS_Code_Project\form_filler_new\config.json'
-# A = Application_Handler(config_path)
-# A.start_application()
-# pass

@@ -5,10 +5,7 @@ import webbrowser
 
 import threading
 from shared_queue import broadcaster
-
-import time
 import copy
-# from deepdiff import DeepDiff
 import queue
 
 from queue import Queue # only for ide's static analysis
@@ -86,7 +83,7 @@ class UI_Handler(threading.Thread):
         # window init setting
         self.queue_ui: Queue = broadcaster.register('ui')
 
-        self.window = sg.Window("FF", self.main_window_layout, resizable=True, keep_on_top=True, finalize=True)
+        self.window = sg.Window("FF", self.main_window_layout, resizable=False, keep_on_top=True, finalize=True)
 
     # start/stop functions
     def start_GUI(self) -> None:
@@ -300,7 +297,8 @@ class UI_Handler(threading.Thread):
                 self.listening_service_running = False
                 self.stop_GUI()
                 break
-
+        import time
+        time.sleep(3)
 
     # thread related functions
     def get_dicts_content_from_data_handler(self) -> tuple[dict, dict]: 
@@ -613,4 +611,3 @@ class UI_Handler(threading.Thread):
         '''use this function to update active value with keyboard handler,
         and this value then write to clipboard for paste'''
         self.send_message('info_update_value', value)
-

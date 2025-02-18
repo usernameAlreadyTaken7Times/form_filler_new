@@ -1,4 +1,3 @@
-from re import U
 import pandas as pd
 from config_handler import ConfigSingleton
 from error_list import Errors
@@ -61,13 +60,20 @@ def write_xlsx(key_dict: dict, data_dict: dict,
 
     df_data = pd.DataFrame.from_dict(data_dict, orient='index')
 
-    df_key = df_key.map(lambda x: x.replace('_x000D_\n', '').strip() if isinstance(x, str) else x)
-    df_data = df_data.map(lambda x: x.replace('_x000D_\n', '').strip() if isinstance(x, str) else x)
+    # df_key = df_key.map(lambda x: x.replace('_x000D_\n', '').strip() if isinstance(x, str) else x)
+    # df_data = df_data.map(lambda x: x.replace('_x000D_\n', '').strip() if isinstance(x, str) else x)
 
     with pd.ExcelWriter(key_path) as writer:
         df_key.to_excel(writer, sheet_name=key_sheet, index=False, header=False)
         df_data.to_excel(writer, sheet_name=data_sheet, index=False)
 
+def backup_xlsx_file(data_path: str, data_sheet: str, key_path: str, key_sheet: str, backup_file_path: str):
+    df_data = pd.read_excel(data_path, sheet_name=data_sheet)
+    df_key = pd.read_excel(key_path, sheet_name=key_sheet)
+
+    with pd.ExcelWriter(backup_file_path) as writer:
+        df_data.to_excel(writer, sheet_name=data_sheet, index=False)
+        df_key.to_excel(writer, sheet_name=key_sheet, index=False)
 
 
 class Data_Handler():
@@ -86,6 +92,8 @@ class Data_Handler():
         self.output_key_path = ConfigSingleton.get_output_key_dict_config()[0]
         self.output_key_sheetname = ConfigSingleton.get_output_key_dict_config()[1]
 
+        self.backup_path = ConfigSingleton.get_backup_xlsx_path()
+
         self.data_loaded = False
 
         self.data_dict: dict[str, dict]
@@ -93,6 +101,7 @@ class Data_Handler():
         self.data_dict = {}
         self.key_dict = {}
 
+        self.setup_backup_xlsx_file() # save key and data sheets into backup file to prevent data lose
         self.load_data_xlsx()
         self.check_data_validity()
 
@@ -152,6 +161,9 @@ class Data_Handler():
                     self.output_key_path, self.output_key_sheetname)
         self.data_loaded = False
 
+    def setup_backup_xlsx_file(self) -> None:
+        '''copy and save a xlsx backup file when init, prevent losing data by running'''
+        backup_xlsx_file(self.data_path, self.data_sheetname, self.key_path, self.key_sheetname, self.backup_path)
 
     # value_dict related functions
     def has_key(self, person: str, key: str) -> bool:

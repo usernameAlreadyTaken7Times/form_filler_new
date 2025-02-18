@@ -1,5 +1,8 @@
 __pycache__/
 .venv/
 .vscode/
-
+assets/xlsx_database_backup.xlsx
+build/
+dist/
+main.spec
 

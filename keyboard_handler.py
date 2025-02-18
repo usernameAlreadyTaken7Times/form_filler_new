@@ -167,11 +167,10 @@ class Keyboard_Handler(threading.Thread):
         copy_text = self.get_clipboard_content()
         if copy_text:
             self.get_ecp_content_signal(copy_text, self.active_character)
-        else:
-            pass # TODO: when not retrive value from clipboard
 
     
     # comm function
     def send_message(self, command: str, content: Any) -> None:
         '''send a message from keyboard subfunction to broadcast queue'''
         broadcaster.broadcast({'source': 'keyboard', 'command': command, 'content': content})
+        

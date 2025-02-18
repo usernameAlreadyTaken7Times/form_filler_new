@@ -311,5 +311,3 @@ class Business_Handler(threading.Thread):
         
             # neither in key-value pairs nor in alias
             return None, None, ''
-        
-

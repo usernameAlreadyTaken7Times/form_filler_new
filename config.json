@@ -9,6 +9,8 @@
     "output_key_xlsx_filepath": "C:\\Users\\86781\\VS_Code_Project\\form_filler_new\\assets\\xlsx_database.xlsx",
     "output_key_sheet_name": "key",
 
+    "backup_xlsx_path": "C:\\Users\\86781\\VS_Code_Project\\form_filler_new\\assets\\xlsx_database_backup.xlsx",
+
     "use_shortcuts": true
     
 }
