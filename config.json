@@ -1,8 +1,13 @@
 {
-    "data_xlsx_filepath": "C:\\Users\\86781\\VS_Code_Project\\form_filler_new\\assets\\xlsx_database.xlsx",
-    "data_sheet_name": "data",
-    "key_xlsx_filepath": "C:\\Users\\86781\\VS_Code_Project\\form_filler_new\\assets\\xlsx_database.xlsx",
-    "key_sheet_name": "key",
+    "input_data_xlsx_filepath": "C:\\Users\\86781\\VS_Code_Project\\form_filler_new\\assets\\xlsx_database.xlsx",
+    "input_data_sheet_name": "data",
+    "input_key_xlsx_filepath": "C:\\Users\\86781\\VS_Code_Project\\form_filler_new\\assets\\xlsx_database.xlsx",
+    "input_key_sheet_name": "key",
+
+    "output_data_xlsx_filepath": "C:\\Users\\86781\\VS_Code_Project\\form_filler_new\\assets\\xlsx_database.xlsx",
+    "output_data_sheet_name": "data",
+    "output_key_xlsx_filepath": "C:\\Users\\86781\\VS_Code_Project\\form_filler_new\\assets\\xlsx_database.xlsx",
+    "output_key_sheet_name": "key",
 
     "use_shortcuts": true
     

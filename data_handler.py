@@ -1,16 +1,23 @@
+from re import U
 import pandas as pd
 from config_handler import ConfigSingleton
 from error_list import Errors
 
-from typing import Tuple
+from typing import Tuple, Optional
 
-def load_and_prehandle_xlsx(data_path: str, data_sheet: str, key_path: str, key_sheet: str) -> Tuple[dict, dict]:
+def unused(func) -> None:
+    '''Use this function to decorate a function that is not used'''
+    setattr(func, "unused", True)
+    return func
+
+
+def load_and_prehandle_xlsx(data_path: str, data_sheet: str, key_path: str, key_sheet: str) -> Tuple[dict[str,list[str]], dict[str,dict[str,str]]]:
     '''Prehandle the .xlsx file as the data source for further use. 
     The .xlsx file should contain two sheets named "key" and "data".
     The content in these two sheets are returned in dicts.'''
 
-    data_sheets = pd.read_excel(data_path, sheet_name=[data_sheet])
-    key_sheets = pd.read_excel(key_path, sheet_name=[key_sheet])
+    data_sheets: dict[str, pd.DataFrame] = pd.read_excel(data_path, sheet_name=[data_sheet])
+    key_sheets: dict[str, pd.DataFrame] = pd.read_excel(key_path, sheet_name=[key_sheet])
 
     # replace the `_x000D_` in sheets, such sign is annoying from Office and Windows system
     df_key = key_sheets['key'].map(lambda x: x.replace('_x000D_\n', '').strip() if isinstance(x, str) else x)
@@ -39,8 +46,6 @@ def load_and_prehandle_xlsx(data_path: str, data_sheet: str, key_path: str, key_
 def write_xlsx(key_dict: dict, data_dict: dict,
                data_path: str, data_sheet: str, key_path: str, key_sheet: str) -> None:
     '''Write the dicts in Data_Handler back to the .xlsx file. Should be called when terminating the program.'''
-    # TODO: the function to write data_dict and key_dict back to .xlsx file after using the app.
-
     key_list = []
     max_length = max(len(v) for v in key_dict.values()) if key_dict else 0
     for key, values in key_dict.items():
@@ -71,10 +76,15 @@ class Data_Handler():
     # init
     def __init__(self) -> None:
         '''database_dict should contain the path and sheet name of data_sheet and key_sheet.'''
-        self.data_path = ConfigSingleton.get_data_dict_config()[0]
-        self.data_sheetname = ConfigSingleton.get_data_dict_config()[1]
-        self.key_path = ConfigSingleton.get_key_dict_config()[0]
-        self.key_sheetname = ConfigSingleton.get_key_dict_config()[1]
+        self.data_path = ConfigSingleton.get_input_data_dict_config()[0]
+        self.data_sheetname = ConfigSingleton.get_input_data_dict_config()[1]
+        self.key_path = ConfigSingleton.get_input_key_dict_config()[0]
+        self.key_sheetname = ConfigSingleton.get_input_key_dict_config()[1]
+
+        self.output_data_path = ConfigSingleton.get_output_data_dict_config()[0]
+        self.output_data_sheetname = ConfigSingleton.get_output_data_dict_config()[1]
+        self.output_key_path = ConfigSingleton.get_output_key_dict_config()[0]
+        self.output_key_sheetname = ConfigSingleton.get_output_key_dict_config()[1]
 
         self.data_loaded = False
 
@@ -136,8 +146,10 @@ class Data_Handler():
 
     def write_data_xlsx(self) -> None:
         '''write data_dict and key_dict back to .xlsx file'''
-        print('test write data xlsx')
-        write_xlsx(self.key_dict, self.data_dict, self.data_path, self.data_sheetname, self.key_path, self.key_sheetname)
+        print('write data into xlsx file')
+        write_xlsx(self.key_dict, self.data_dict,
+                    self.output_data_path, self.output_data_sheetname,
+                    self.output_key_path, self.output_key_sheetname)
         self.data_loaded = False
 
 
@@ -216,9 +228,10 @@ class Data_Handler():
 
 
     # alias_dict(key_dict) related functions
+    @unused
     def key_has_any_alias(self, key_name: str) -> bool:
         '''Return weather the given key has any alias or not.'''
-        if self.has_key(key_name): # test if key valid
+        if key_name in self.key_dict.keys(): # test if key valid
             if len(self.key_dict[key_name]) != 0:
                 return True
             else:
@@ -232,11 +245,12 @@ class Data_Handler():
             return True if alias_name in self.key_dict[key_name] else False
         else:
             raise KeyError
-            
+    
+    @unused
     def add_alias_for_existing_key(self, key_name: str, alias_name: str) -> None:
         '''add an alias for existing key, modify the key sheet,
         to ensure the key does exist in two dicts and the given alias is not already there.'''
-        if self.has_key(key_name): # test if key valid
+        if key_name in self.key_dict.keys(): # test if key valid
             if self.key_has_given_alias(key_name, alias_name): # test if the alias already exist
                 raise KeyError
             else:
@@ -244,10 +258,11 @@ class Data_Handler():
         else:
             raise KeyError
 
+    @unused
     def del_alias_for_existing_key(self, key_name: str, alias_name: str) -> None:
         '''delete an alias for existing key, modify the key sheet,
         to ensure the key does exist in two dicts and the given alias is not already there.'''
-        if self.has_key(key_name): # test if key valid
+        if key_name in self.key_dict.keys(): # test if key valid
             if self.key_has_given_alias(key_name, alias_name): # test if the alias already exist
                 self.key_dict[key_name].remove(alias_name)
             else:
@@ -257,7 +272,7 @@ class Data_Handler():
 
 
     # search alias and match key
-    def find_key_from_alias(self, alias_name: str) -> str:
+    def find_key_from_alias(self, alias_name: str) -> Optional[str]:
         '''This function trys to find the key name based on the given alias name,
         then the found key can use function 'get_value_from_key' to retrive value for further use.'''
         # test if given alias has any match for each key name

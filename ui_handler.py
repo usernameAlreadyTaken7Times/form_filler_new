@@ -1,13 +1,14 @@
 import PySimpleGUI as sg
 from error_list import Errors
 from config_handler import ConfigSingleton
+import webbrowser
 
 import threading
 from shared_queue import broadcaster
 
 import time
 import copy
-from deepdiff import DeepDiff
+# from deepdiff import DeepDiff
 import queue
 
 from queue import Queue # only for ide's static analysis
@@ -34,10 +35,9 @@ class UI_Handler(threading.Thread):
 
 
         # define main GUI window
-        # TBD: design the layout
         self.main_window_layout = [
             [sg.Text("Form_Filler v0.3", font=("Arial", 12, "bold"), text_color="white")],
-            [sg.Text("an extended copy/paste service", font=("Arial", 9, "italic"), text_color="white")],
+            [sg.Text("extended copy/paste service", font=("Arial", 9, "italic"), text_color="white")],
             [sg.HorizontalSeparator()],
             
             [sg.Text("Run/Terminate", font=("Arial", 10, "bold", "underline"), text_color="white")],
@@ -76,25 +76,28 @@ class UI_Handler(threading.Thread):
                       font=("Arial", 10), text_color="gold", enable_events=True)],
             [sg.HorizontalSeparator()],
 
-            [sg.Text("test__test", font=("Arial", 8), text_color="white")]
+            [sg.Text("Related", font=("Arial", 10, "bold", "underline"), text_color="white")],
+            [sg.Button("About", size=(8, 1), font=("Arial", 8),
+                        key="KEY_project_page", tooltip=" open project on Github page ", disabled=False),
+             sg.Button("Bug", size=(8, 1), font=("Arial", 8),
+                        key="KEY_bug_report", tooltip=" open Github page and report a bug ", disabled=False)]
         ]
 
         # window init setting
         self.queue_ui: Queue = broadcaster.register('ui')
+
+        self.window = sg.Window("FF", self.main_window_layout, resizable=True, keep_on_top=True, finalize=True)
 
     # start/stop functions
     def start_GUI(self) -> None:
         '''starts the GUI program and show the window'''
         if not self.window_running:
             self.window_running = True
-
             # load replica from data_handler during first time loading GUI interface
             self.data_dict: dict[str, dict]
             self.key_dict: dict[str, list]
             self.data_dict, self.key_dict = self.get_dicts_content_from_data_handler()
-
-            self.window = sg.Window("FFv0.3", self.main_window_layout, resizable=True, keep_on_top=True, finalize=True)
-            # self.window = sg.Window("FFv0.3", self.main_window_layout, resizable=True, finalize=True)
+            self.window.refresh()
         else:
             raise Errors.ServiceStatusError('GUI status error(already running)')
         
@@ -112,10 +115,10 @@ class UI_Handler(threading.Thread):
         '''starts the keyboard listening service, should be triggered when run/ctrl+r is pressed'''
         if not self.listening_service_running:
             self.listening_service_running = True
-            self.window['KEY_run'].update(disabled=True)
-            self.window['KEY_terminate'].update(disabled=False)
-            self.window['KEY_main_data_modifier'].update(disabled=False)
-            self.window['KEY_main_alias_modifier'].update(disabled=False)
+            self.window['KEY_run'].update(disabled=True) # type: ignore
+            self.window['KEY_terminate'].update(disabled=False) # type: ignore
+            self.window['KEY_main_data_modifier'].update(disabled=False) # type: ignore
+            self.window['KEY_main_alias_modifier'].update(disabled=False) # type: ignore
 
             # setup lists to store characters and keys,
             # they should be updated from self.data_dict and self.key_dict
@@ -130,9 +133,9 @@ class UI_Handler(threading.Thread):
             self.active_alias_index = 0
             self.active_alias = '' # alias should stay with '' unless it's found
 
-            self.window['TEXT_active_character'].update(self.active_character)
-            self.window['TEXT_active_key'].update(self.active_key)
-            self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key])
+            self.window['TEXT_active_character'].update(value=self.active_character) # type: ignore
+            self.window['TEXT_active_key'].update(value=self.active_key) # type: ignore
+            self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key]) # type: ignore
 
             # start keyboard listening from keyboard_handler level through news
             self.send_message('start_keyboard_listening', '')
@@ -141,14 +144,15 @@ class UI_Handler(threading.Thread):
         '''stops the keyboard listening sevice, should be triggered when terminate/ctrl+t is pressed'''
         if self.listening_service_running:
             self.listening_service_running = False
-            self.window['KEY_run'].update(disabled=False)
-            self.window['KEY_terminate'].update(disabled=True)
-            self.window['KEY_main_data_modifier'].update(disabled=True)
-            self.window['KEY_main_alias_modifier'].update(disabled=True)
+            self.window['KEY_run'].update(disabled=False) # type: ignore
+            self.window['KEY_terminate'].update(disabled=True) # type: ignore
+            self.window['KEY_main_data_modifier'].update(disabled=True) # type: ignore
+            self.window['KEY_main_alias_modifier'].update(disabled=True) # type: ignore
 
-            self.window['TEXT_active_character'].update(" --- ")
-            self.window['TEXT_active_key'].update(" --- ")
-            self.window['TEXT_active_value'].update(" --- ")
+            self.window['TEXT_active_character'].update(value=" --- ") # type: ignore
+            self.window['TEXT_active_key'].update(value=" --- ") # type: ignore
+            self.window['TEXT_active_value'].update(value=" --- ") # type: ignore
+            self.window['TEXT_active_alias'].update(value=" --- ") # type: ignore
 
             # stop keyboard listening from keyboard_handler level through news
             self.send_message('stop_keyboard_listening', '')
@@ -163,8 +167,9 @@ class UI_Handler(threading.Thread):
             
             try:
                 tmp_news = self.poll_messages()
-                print(f'[ui]: {tmp_news['command']} from {tmp_news['source']}\n')
-                pass
+                if tmp_news:
+                    print(f'[ui]: {tmp_news['command']} from {tmp_news['source']}\n')
+                    pass
             except:
                 tmp_news = None
 
@@ -173,19 +178,20 @@ class UI_Handler(threading.Thread):
 
             # receive signals
             if tmp_news and tmp_news['command'] == 'info_ecp_value':
-                if len(tmp_news['content'][0]) >= 12:
-                    self.window['TEXT_active_value'].update(tmp_news['content'][0][:11]+'…')
+                self.window['TEXT_active_key'].update(tmp_news['content'][1]) # type: ignore
+                if len(tmp_news['content'][0]) >= 11:
+                    self.window['TEXT_active_value'].update(tmp_news['content'][0][:10]+'…') # type: ignore
                 else:
-                    self.window['TEXT_active_value'].update(tmp_news['content'][0])
-                if len(tmp_news['content']) == 2: # then has an alias
-                    self.window['TEXT_active_alias'].update(tmp_news['content'][1])
+                    self.window['TEXT_active_value'].update(tmp_news['content'][0]) # type: ignore
+                if len(tmp_news['content']) == 3: # then has an alias
+                    self.window['TEXT_active_alias'].update(tmp_news['content'][2]) # type: ignore
                 else:
-                    self.window['TEXT_active_alias'].update(' --- ')
+                    self.window['TEXT_active_alias'].update(value=' --- ') # type: ignore
             elif tmp_news and tmp_news['command'] == 'no_info_value_found':
                 return_response = sg.popup_yes_no("no match key or alias. create one?", keep_on_top=True)
                 if return_response == 'Yes':
                     self.stop_listening_service()
-                    self.popup_data_dict_modifier()
+                    self.popup_alias_dict_modifier()
                     self.set_data_dict_content_to_data_handler() # sync the data_dict and key_dict with updates
                     self.set_key_dict_content_to_data_handler() # it's possible when key-alias changes toghther
                     self.start_listening_service() # keyboard_listening_service back online
@@ -194,20 +200,18 @@ class UI_Handler(threading.Thread):
 
             elif tmp_news and tmp_news['command'] == 'get_active_character':
                 self.send_message('info_active_character', self.active_character)
-            # if tmp_news and tmp_news['source'] == 'business' and tmp_news['command'] == 'send_dicts':
-            #     self.data_dict, self.key_dict = tmp_news['content']
 
             elif tmp_news and tmp_news['command'] == 'switch_key_right':
                 self.active_key_index += 1
                 if self.active_key_index == len(self.key_list):
                     self.active_key_index = 0
                 self.active_key = self.key_list[self.active_key_index]
-                self.window['TEXT_active_key'].update(self.active_key)
-                if len(self.data_dict[self.active_character][self.active_key]) >= 12:
-                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key][:11]+'…')
+                self.window['TEXT_active_key'].update(value=self.active_key) # type: ignore
+                if len(self.data_dict[self.active_character][self.active_key]) >= 11:
+                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key][:10]+'…') # type: ignore
                 else:
-                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key])
-                self.window['TEXT_active_alias'].update(' --- ')
+                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key]) # type: ignore
+                self.window['TEXT_active_alias'].update(value=' --- ') # type: ignore
                 self.update_key()
                 self.update_value(self.data_dict[self.active_character][self.active_key])
             elif tmp_news and tmp_news['command'] == 'switch_key_left':
@@ -215,12 +219,12 @@ class UI_Handler(threading.Thread):
                 if self.active_key_index == -1:
                     self.active_key_index = len(self.key_list)-1
                 self.active_key = self.key_list[self.active_key_index]
-                self.window['TEXT_active_key'].update(self.active_key)
-                if len(self.data_dict[self.active_character][self.active_key]) >= 12:
-                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key][:11]+'…')
+                self.window['TEXT_active_key'].update(value=self.active_key) # type: ignore
+                if len(self.data_dict[self.active_character][self.active_key]) >= 11:
+                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key][:10]+'…') # type: ignore
                 else:
-                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key])
-                self.window['TEXT_active_alias'].update(' --- ')
+                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key]) # type: ignore
+                self.window['TEXT_active_alias'].update(value=' --- ') # type: ignore
                 self.update_key()
                 self.update_value(self.data_dict[self.active_character][self.active_key])
             elif tmp_news and tmp_news['command'] == 'switch_character_down': # why dows 'down' mean next instead of last? 
@@ -228,12 +232,12 @@ class UI_Handler(threading.Thread):
                 if self.active_character_index == len(self.character_list):
                     self.active_character_index = 0
                 self.active_character = self.character_list[self.active_character_index]
-                self.window['TEXT_active_character'].update(self.active_character)
-                if len(self.data_dict[self.active_character][self.active_key]) >= 12:
-                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key][:11]+'…')
+                self.window['TEXT_active_character'].update(value=self.active_character) # type: ignore
+                if len(self.data_dict[self.active_character][self.active_key]) >= 11:
+                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key][:10]+'…') # type: ignore
                 else:
-                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key])
-                self.window['TEXT_active_alias'].update(' --- ')
+                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key]) # type: ignore
+                self.window['TEXT_active_alias'].update(value=' --- ') # type: ignore
                 self.update_character()
                 self.update_value(self.data_dict[self.active_character][self.active_key])
             elif tmp_news and tmp_news['command'] == 'switch_character_up':
@@ -241,12 +245,12 @@ class UI_Handler(threading.Thread):
                 if self.active_character_index == -1:
                     self.active_character_index = len(self.character_list)-1
                 self.active_character = self.character_list[self.active_character_index]
-                self.window['TEXT_active_character'].update(self.active_character)
-                if len(self.data_dict[self.active_character][self.active_key]) >= 12:
-                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key][:11]+'…')
+                self.window['TEXT_active_character'].update(value=self.active_character) # type: ignore
+                if len(self.data_dict[self.active_character][self.active_key]) >= 11:
+                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key][:10]+'…') # type: ignore
                 else:
-                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key])
-                self.window['TEXT_active_alias'].update(' --- ')
+                    self.window['TEXT_active_value'].update(self.data_dict[self.active_character][self.active_key]) # type: ignore
+                self.window['TEXT_active_alias'].update(value=' --- ') # type: ignore
                 self.update_character()
                 self.update_value(self.data_dict[self.active_character][self.active_key])
 
@@ -269,8 +273,8 @@ class UI_Handler(threading.Thread):
             # start keyboard_listening
             elif event == 'KEY_run' or (tmp_news and tmp_news['source'] == 'keyboard' and tmp_news['command'] == 'start_main_thread'):
                 if not self.listening_service_running:
-                    sg.popup('test_listening_startup', keep_on_top=True)
-                    print('test_listening_startup')
+                    sg.popup('keyboard_listening_startup', keep_on_top=True)
+                    print('keyboard_listening_startup')
                     self.start_listening_service()
                 else:
                     sg.popup('listening service already running', keep_on_top=True)
@@ -280,16 +284,21 @@ class UI_Handler(threading.Thread):
             # terminate keyboard_listening
             elif event == 'KEY_terminate' or (tmp_news and tmp_news['source'] == 'keyboard' and tmp_news['command'] == 'stop_main_thread'):
                 if self.listening_service_running:
-                    sg.popup('test_listening_stop', keep_on_top=True)
-                    print('call stop_gui function and stop')
+                    sg.popup('keyboard_listening_stop', keep_on_top=True)
+                    # print('call stop_gui function and stop')
                     self.stop_listening_service()
                 else:
                     sg.popup('listening service already terminated', keep_on_top=True)
                     print('try to terminate again')
+            elif event == 'KEY_bug_report':
+                webbrowser.open("https://github.com/usernameAlreadyTaken7Times/form_filler_new/issues")
+
+            elif event == 'KEY_project_page':
+                webbrowser.open("https://github.com/usernameAlreadyTaken7Times/form_filler_new")
+            
             elif event == sg.WINDOW_CLOSED:
-                self.stop_listening_service()
+                self.listening_service_running = False
                 self.stop_GUI()
-                sg.popup('service exit')
                 break
 
 
@@ -300,12 +309,12 @@ class UI_Handler(threading.Thread):
         while True:
             try:
                 tmp_news = self.poll_messages()
-                print(f'[test_thread]: queue_ui get new task: {tmp_news['command']} from {tmp_news['source']}\n')
             except:
                 tmp_news = None
             
             if tmp_news and tmp_news['source'] == 'business' and tmp_news['command'] == 'send_dicts':
-                data_dict, key_dict = tmp_news['content']
+                # this message is from "business" handler message queue, and 'content' should be two dicts
+                data_dict, key_dict = tmp_news['content'] # type: ignore
                 break
         
         return data_dict, key_dict
@@ -324,12 +333,6 @@ class UI_Handler(threading.Thread):
         self.send_message('set_key_dict', self.key_dict)
 
 
-
-    # ui update related functions
-    def switch_character(self, direction) -> int:
-        '''use the input direction(up/down) to switch to cooresponding character 
-        and show in GUI'''
-        
 
     # popup window functions
     def popup_data_dict_modifier(self) -> None:
@@ -360,9 +363,9 @@ class UI_Handler(threading.Thread):
         data_window = sg.Window('data_dict modifier', popup_data_window_layout, keep_on_top=True, finalize=True)
         data_window.force_focus()
 
-        data_window['KEY_data_modifier_character'].update(set_to_index=[0])
-        data_window['KEY_data_modifier_key'].update(set_to_index=[0])
-        data_window["KEY_data_modifier_value"].update(tmp_data_dict[selected_character][selected_key])
+        data_window['KEY_data_modifier_character'].update(set_to_index=[0]) # type: ignore
+        data_window['KEY_data_modifier_key'].update(set_to_index=[0]) # type: ignore
+        data_window["KEY_data_modifier_value"].update(tmp_data_dict[selected_character][selected_key]) # type: ignore
 
         # run loop
         while True:
@@ -381,22 +384,19 @@ class UI_Handler(threading.Thread):
                 # key list is empty, can cause many problem
                 sg.popup("key_list is empty, please add content to it", keep_on_top=True)
 
-
-
-
             elif event == "KEY_data_modifier_character":
                 selected_character = values["KEY_data_modifier_character"][0] if values["KEY_data_modifier_character"] else None
                 if selected_character:
-                    data_window["KEY_data_modifier_value"].update(tmp_data_dict[selected_character][selected_key])
+                    data_window["KEY_data_modifier_value"].update(tmp_data_dict[selected_character][selected_key]) # type: ignore
             
             elif event == "KEY_data_modifier_key" and selected_character:
                 selected_key = values["KEY_data_modifier_key"][0] if values["KEY_data_modifier_key"] else None
                 if selected_key:
-                    data_window["KEY_data_modifier_value"].update(tmp_data_dict[selected_character][selected_key])
+                    data_window["KEY_data_modifier_value"].update(tmp_data_dict[selected_character][selected_key]) # type: ignore
             
             if event == "KEY_data_modifier_value" and selected_character and selected_key:
                 tmp_data_dict[selected_character][selected_key] = values["KEY_data_modifier_value"]
-                data_window["KEY_data_modifier_value"].update(tmp_data_dict[selected_character][selected_key])
+                data_window["KEY_data_modifier_value"].update(tmp_data_dict[selected_character][selected_key]) # type: ignore
             
             if event == "KEY_data_modifier_update":
             # if event == "KEY_data_modifier_update" and selected_character and selected_key: # two selected items necessary?
@@ -439,7 +439,8 @@ class UI_Handler(threading.Thread):
                 new_character = sg.popup_get_text("new character:", keep_on_top=True)
                 if new_character and new_character not in tmp_data_dict:
                     tmp_data_dict[new_character] = {attr: "" for attr in key}
-                    data_window["KEY_data_modifier_character"].update(values=list(tmp_data_dict.keys()))
+                    data_window["KEY_data_modifier_character"].update(values=list(tmp_data_dict.keys())) # type: ignore
+                    data_window["KEY_data_modifier_value"].update('') # type: ignore
             
             if event == "KEY_del_character" and selected_character:
                 response = sg.popup_yes_no('delete character and all his/her keys?', keep_on_top=True)
@@ -448,10 +449,10 @@ class UI_Handler(threading.Thread):
                     if len(tmp_data_dict) > 0:
                         selected_character = list(tmp_data_dict.keys())[0]
                         
-                        data_window["KEY_data_modifier_character"].update(values=list(tmp_data_dict.keys()),
+                        data_window["KEY_data_modifier_character"].update(values=list(tmp_data_dict.keys()), # type: ignore
                                                      set_to_index=[list(tmp_data_dict.keys()).index(selected_character)])
                         # data_window["KEY_data_modifier_key"].update(values=[])
-                        data_window["KEY_data_modifier_value"].update(tmp_data_dict[selected_character][selected_key])
+                        data_window["KEY_data_modifier_value"].update(tmp_data_dict[selected_character][selected_key]) # type: ignore
                     else:
                         sg.popup('no character left. please add a character', keep_on_top=True)
             
@@ -465,8 +466,9 @@ class UI_Handler(threading.Thread):
                     for person in tmp_data_dict:
                         tmp_data_dict[person][new_key] = ""
                     selected_key = new_key
-                    data_window["KEY_data_modifier_key"].update(values=key, set_to_index=[key.index(selected_key)])
-            
+                    data_window["KEY_data_modifier_key"].update(values=key, set_to_index=[key.index(selected_key)]) # type: ignore
+                    data_window["KEY_data_modifier_value"].update('') # type: ignore
+
             if event == "KEY_del_key" and selected_key:
                 response = sg.popup_yes_no('delete this key for all characters?', keep_on_top=True)
                 if response == 'Yes':
@@ -475,12 +477,12 @@ class UI_Handler(threading.Thread):
                         del tmp_data_dict[person][selected_key]
                     if len(key) == 0:
                         selected_key = None
-                        data_window["KEY_data_modifier_key"].update(values=key)
-                        data_window["KEY_data_modifier_value"].update("")
+                        data_window["KEY_data_modifier_key"].update(values=key) # type: ignore
+                        data_window["KEY_data_modifier_value"].update(value="") # type: ignore
                     else:
                         selected_key = key[0]
-                        data_window["KEY_data_modifier_key"].update(values=key, set_to_index=[key.index(selected_key)])
-                        data_window["KEY_data_modifier_value"].update(tmp_data_dict[selected_character][selected_key])
+                        data_window["KEY_data_modifier_key"].update(values=key, set_to_index=[key.index(selected_key)]) # type: ignore
+                        data_window["KEY_data_modifier_value"].update(value=tmp_data_dict[selected_character][selected_key]) # type: ignore
 
             elif event == "KEY_del_key" and not selected_key:
                 sg.popup("please choose a key to delete", keep_on_top=True)
@@ -490,7 +492,7 @@ class UI_Handler(threading.Thread):
 
         tmp_key_dict: dict[str, list]
         tmp_key_dict = copy.deepcopy(self.key_dict) # create a copy of key_dict for in-function use
-        selected_key = list(tmp_key_dict.keys())[0]
+        selected_key: str = list(tmp_key_dict.keys())[0]
         selected_alias = (tmp_key_dict[selected_key][0] if len(tmp_key_dict[selected_key])>0 else None)
 
         # popup key_dict modifier window layout
@@ -508,8 +510,8 @@ class UI_Handler(threading.Thread):
         key_window = sg.Window('key_dict modifier', popup_key_window_layout, keep_on_top=True, finalize=True)
         key_window.force_focus()
 
-        key_window['KEY_alias_modifier_key'].update(set_to_index=[0])
-        key_window['KEY_alias_modifier_alias'].update(set_to_index=[0])
+        key_window['KEY_alias_modifier_key'].update(set_to_index=[0]) # type: ignore
+        key_window['KEY_alias_modifier_alias'].update(set_to_index=[0]) # type: ignore
 
         # run loop
         while True:
@@ -527,13 +529,13 @@ class UI_Handler(threading.Thread):
                     
             
             if event == "KEY_alias_modifier_key":
-                selected_key = values["KEY_alias_modifier_key"][0] if values["KEY_alias_modifier_key"] else None
-                if selected_key:
+                selected_key = values["KEY_alias_modifier_key"][0] if values["KEY_alias_modifier_key"] else ''
+                if selected_key != '':
                     if len(tmp_key_dict[selected_key]) == 0:
-                        key_window["KEY_alias_modifier_alias"].update(values=tmp_key_dict[selected_key])
+                        key_window["KEY_alias_modifier_alias"].update(values=tmp_key_dict[selected_key]) # type: ignore
                         selected_alias = None
                     else:
-                        key_window["KEY_alias_modifier_alias"].update(values=tmp_key_dict[selected_key], set_to_index=[0])
+                        key_window["KEY_alias_modifier_alias"].update(values=tmp_key_dict[selected_key], set_to_index=[0]) # type: ignore
                         selected_alias = tmp_key_dict[selected_key][0]
             
             if event == "KEY_alias_modifier_alias":
@@ -564,7 +566,7 @@ class UI_Handler(threading.Thread):
                 if new_alias and new_alias not in tmp_key_dict[selected_key]:
                     tmp_key_dict[selected_key].append(new_alias)
                     selected_alias = new_alias
-                    key_window["KEY_alias_modifier_alias"].update(values=tmp_key_dict[selected_key])
+                    key_window["KEY_alias_modifier_alias"].update(values=tmp_key_dict[selected_key]) # type: ignore
             
             elif event == "KEY_add_alias" and not selected_key:
                 sg.popup("please choose a key to add alias", keep_on_top=True)
@@ -573,10 +575,10 @@ class UI_Handler(threading.Thread):
                 tmp_key_dict[selected_key].remove(selected_alias)
                 if len(tmp_key_dict[selected_key]) == 0:
                     selected_alias = None
-                    key_window["KEY_alias_modifier_alias"].update(values=[])
+                    key_window["KEY_alias_modifier_alias"].update(values=[]) # type: ignore
                 else:
                     selected_alias = tmp_key_dict[selected_key][0]
-                    key_window["KEY_alias_modifier_alias"].update(tmp_key_dict[selected_key],
+                    key_window["KEY_alias_modifier_alias"].update(tmp_key_dict[selected_key], # type: ignore
                                                  set_to_index=[tmp_key_dict[selected_key].index(selected_alias)])
             
             elif event == "KEY_del_alias" and not selected_alias:
@@ -612,8 +614,3 @@ class UI_Handler(threading.Thread):
         and this value then write to clipboard for paste'''
         self.send_message('info_update_value', value)
 
-
-# # test code
-# A = UI_Handler(r'C:\Users\86781\VS_Code_Project\form_filler_new\config.json')
-# A.start_GUI()
-# pass

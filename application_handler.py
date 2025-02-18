@@ -1,12 +1,6 @@
 from keyboard_handler import Keyboard_Handler
 from business_handler import Business_Handler
 from ui_handler import UI_Handler
-from error_list import Errors
-
-from shared_queue import broadcaster
-import threading
-
-
 
 class Application_Handler():
     '''This application class is in the highest layer.
@@ -36,19 +30,8 @@ class Application_Handler():
             self.ui_handler.run_ui() # other threads's starting signal are run function, while ui is the main thread
 
 
-    
-    # def stop_application(self) -> None:
-    #     '''stop the application, should be called when 'Ctrl+T' is pressed.'''
-    #     if self.app_running:
-    #         self.app_running = False
-    #         self.keyboard_handler.stop_basic_service()
-    #         self.business_handler.stop_business_service()
-    #         self.business_handler.stop_basic_service()
-    #         self.ui_handler.stop_GUI()
-
-
-# test code
-config_path = r'C:\Users\86781\VS_Code_Project\form_filler_new\config.json'
-A = Application_Handler(config_path)
-A.start_application()
-pass
+# # test code
+# config_path = r'C:\Users\86781\VS_Code_Project\form_filler_new\config.json'
+# A = Application_Handler(config_path)
+# A.start_application()
+# pass

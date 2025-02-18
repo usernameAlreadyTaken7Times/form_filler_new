@@ -1,10 +1,11 @@
+from typing import Tuple
 import keyboard, time, pyperclip
 from error_list import Errors
 
 from shared_queue import broadcaster
 import threading
 from queue import Queue # only for ide's static analysis
-from typing import Optional
+from typing import Optional, Any
 
 
 class Keyboard_Handler(threading.Thread):
@@ -23,16 +24,16 @@ class Keyboard_Handler(threading.Thread):
         '''start keyboard_handler basic service'''
         if not self.basic_service:
             self.basic_service = True
-            threading.Thread(target=self.run_keyboard_listening, daemon=True).start()
+            threading.Thread(target=self.run_keyboard, daemon=True).start()
         else:
-            raise Errors.ServiceStatusError
+            raise Errors.ServiceStatusError('keyboard basic service already started')
     
     def stop_basic_service(self) -> None:
         '''stop keyboard_handler basic service'''
         if self.basic_service:
             self.basic_service = False
         else:
-            raise Errors.ServiceStatusError
+            raise Errors.ServiceStatusError('keyboard basic service already stopped')
 
 
     def start_listening_service(self) -> None:
@@ -43,17 +44,17 @@ class Keyboard_Handler(threading.Thread):
             self.active_character, self.active_key = self.get_default_parameter()
             
         else:
-            raise Errors.ServiceStatusError
+            raise Errors.ServiceStatusError('keyboard listening service already started')
     
     def stop_listening_service(self) -> None:
         '''stop keyboard listening service'''
         if self.keyboard_listening_service and self.basic_service:
             self.keyboard_listening_service = False
         else:
-            raise Errors.ServiceStatusError
+            raise Errors.ServiceStatusError('keyboard listening service already stopped')
      
     # listening main thread
-    def run_keyboard_listening(self) -> None:
+    def run_keyboard(self) -> None:
         '''keyboard listening main thread, should running in background'''
 
         # define shortcuts
@@ -100,7 +101,7 @@ class Keyboard_Handler(threading.Thread):
                 break
             
     # thread init related function
-    def get_default_parameter(self) -> None:
+    def get_default_parameter(self) -> Tuple[str, str]:
         '''create a tmp receive channel for default character when init'''
         self.send_message('get_default_parameter', '')
         while True:
@@ -164,10 +165,13 @@ class Keyboard_Handler(threading.Thread):
     def get_ecp_value(self) -> None:
         '''get ecp value from queue'''
         copy_text = self.get_clipboard_content()
-        self.get_ecp_content_signal(copy_text, self.active_character)
+        if copy_text:
+            self.get_ecp_content_signal(copy_text, self.active_character)
+        else:
+            pass # TODO: when not retrive value from clipboard
 
     
     # comm function
-    def send_message(self, command: str, content: str) -> None:
+    def send_message(self, command: str, content: Any) -> None:
         '''send a message from keyboard subfunction to broadcast queue'''
         broadcaster.broadcast({'source': 'keyboard', 'command': command, 'content': content})

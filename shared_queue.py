@@ -7,7 +7,7 @@ class MessageBroadcaster:
         self.queues = {}  # store all queues
         self.lock = threading.Lock()  # lock
 
-    def register(self, logic_name) -> queue:
+    def register(self, logic_name) -> queue.Queue:
         '''register broadcaster queue for type'''
         with self.lock:
             if logic_name not in self.queues:

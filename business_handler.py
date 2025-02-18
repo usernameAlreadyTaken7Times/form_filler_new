@@ -1,10 +1,17 @@
+from gc import set_debug
+from typing import Tuple
 from data_handler import Data_Handler
 from error_list import Errors
 
 import threading
 from shared_queue import broadcaster
 from queue import Queue
+from typing import Any, Optional
 
+def unused(func) -> None:
+    '''Use this function to decorate a function that is not used'''
+    setattr(func, "unused", True)
+    return func
 
 
 class Business_Handler(threading.Thread):
@@ -14,8 +21,7 @@ class Business_Handler(threading.Thread):
         self.basic_service_running = False # basic service means the main program
         self.business_service_running = False # business service means the extended copy/paste service
 
-        data_handler = Data_Handler()
-        self.data_handler = data_handler
+        self.data_handler: Data_Handler = Data_Handler()
 
         self.character_list = []
         self.active_character_index = 0
@@ -105,16 +111,18 @@ class Business_Handler(threading.Thread):
 
             elif tmp_news and tmp_news['source'] == 'ui' and tmp_news['command'] == 'set_data_dict':
                 self.data_handler.data_dict = tmp_news['content']
+                self.character_list = self.data_handler.get_character_list() # sync
             
             elif tmp_news and tmp_news['source'] == 'ui' and tmp_news['command'] == 'set_key_dict':
                 self.data_handler.key_dict = tmp_news['content']
+                self.key_list = self.data_handler.get_key_list() # sync to business handler- key_list
             
             elif tmp_news and tmp_news['command'] == 'get_ecp_value':
                 tmp_text, character = tmp_news['content']
-                tmp_return_value, tmp_return_alias= self.get_ecp_value(tmp_text, character)
+                tmp_return_value, tmp_return_key, tmp_return_alias= self.get_ecp_value(tmp_text, character)
                 if tmp_return_value:
-                    self.send_message('info_ecp_value', (tmp_return_value, tmp_return_alias))
-                else: # return value is '', means no key/alias is match the input
+                    self.send_message('info_ecp_value', (tmp_return_value, tmp_return_key, tmp_return_alias))
+                else: # return value is None, means no key/alias is match the input
                     self.send_message('no_info_value_found', '')
             
             elif tmp_news and tmp_news['command'] == 'stop_service':
@@ -139,6 +147,7 @@ class Business_Handler(threading.Thread):
 
 
     # ui navigate functions
+    @unused
     def change_active_character_keyboard(self, direction: int) -> None:
         '''This function can be used to change active character once a time based on the input direction vector.
         It should be called when UP/DOWN direction arrow key is selected.\n
@@ -156,6 +165,7 @@ class Business_Handler(threading.Thread):
                 self.active_character_index = len(self.character_list) - 1
             self.active_character = self.character_list[self.active_character_index] # update character
 
+    @unused
     def change_active_character_select_box(self, index: int) -> None:
         '''This function can be used to change active character quickly.
         it is often be called by a select box from ui_handler.'''
@@ -164,6 +174,7 @@ class Business_Handler(threading.Thread):
         self.active_character_index = index # overwrite the character index
         self.active_character = self.character_list[self.active_character_index] # update character
 
+    @unused
     def change_active_key_value_pair_keyboard(self, direction: int) -> None:
         '''This function can be used to change active key-value pair once a time based on the input direction vector.
         It should be called when RIGHT/LEFT direction arrow key is selected.\n 
@@ -183,6 +194,7 @@ class Business_Handler(threading.Thread):
             self.active_key = self.key_list[self.active_key_index] # update key
             self.active_value = self.data_handler.get_value_from_key(self.active_character, self.active_key) # update value
 
+    @unused
     def change_active_key_value_pair_select_box(self, index: int) -> None:
         '''This function can be used to change active key-value pair quickly.
         it is often be called by a select box from ui_handler.'''
@@ -194,26 +206,41 @@ class Business_Handler(threading.Thread):
 
 
     # key/value/alias modification functions
+    @unused
     def add_alias_to_existing_key_value_pair(self, alias: str, key: str) -> None:
         '''This function adds an alias to the existing key-value pair for the current character
         (Other characters also share such alias). '''
-        self.data_handler.add_alias_for_existing_key(key, alias)
+        if self.data_handler:
+            # here the ide just cannot give up telling me it could be None,
+            # so I just ignore this type warning
+            self.data_handler.add_alias_for_existing_key(key, alias) # type: ignore
+        else:
+            raise Errors.ServiceStatusError('Data_Handler is not initialized')
 
+    @unused
     def del_alias_to_existing_key_value_pair(self, alias: str, key: str) -> None:
         '''This function deletes an alias to the existing key-value pair for the current character
         (Other characters also share such alias). '''
-        self.data_handler.del_alias_for_existing_key(key, alias)
+        if self.data_handler:
+            # here the ide just cannot give up telling me it could be None,
+            # so I just ignore this type warning
+            self.data_handler.del_alias_for_existing_key(key, alias)# type: ignore
+        else:
+            raise Errors.ServiceStatusError('Data_Handler is not initialized')
 
+    @unused
     def add_empty_key_value_pair_for_all_characters(self, key: str) -> None:
         '''add an empty value-pair for all characters.'''
         self.data_handler.add_empty_key_value_pair(self.active_character, key) # write new key-value pair in data_handler
         self.key_list = self.data_handler.get_key_list() # update key list
         self.active_key_index = self.key_list.index(self.active_key) # update active key index
 
+    @unused
     def set_key_value_pair_for_active_character(self, character: str, key: str, value: str) -> None:
         '''set value based on the given character and key'''
         self.data_handler.set_value_from_key_value_pair(character, key, value)
 
+    @unused
     def del_key_value_pair_for_all_characters(self, key: str) -> None:
         '''delete the given key-value pair for all characters'''
         for character in self.character_list:
@@ -225,13 +252,15 @@ class Business_Handler(threading.Thread):
             self.active_key_index = self.key_list.index(self.active_key) # rebuild index
         else:
             self.active_key_index = self.key_list.index(self.active_key) # update active key index
-        
+    
+    @unused
     def add_character(self, new_character: str) -> None:
         '''adds a new character to the database, and set all default values as 'None'.'''
         self.data_handler.add_empty_person(new_character)
         self.character_list = self.data_handler.get_character_list() # update character list
         self.active_character_index = self.character_list.index(self.active_character) # update active character index
     
+    @unused
     def del_character(self, del_character: str) -> None:
         '''deletes a character from the database'''
         self.data_handler.del_person(del_character)
@@ -253,24 +282,24 @@ class Business_Handler(threading.Thread):
         '''send the first character and key for keyboard's self_active_character when init'''
         self.send_message('send_default_parameter', (list(self.data_handler.data_dict.keys())[0], list(self.data_handler.key_dict.keys())[0]))
 
-    def send_message(self, command: str, content: str) -> None:
+    def send_message(self, command: str, content: Any) -> None:
         '''send a message from business subfunction to broadcast queue'''
         broadcaster.broadcast({'source': 'business', 'command': command, 'content': content})
 
 
 
     # get key value function
-    def get_ecp_value(self, text: str, character: str) -> str:
+    def get_ecp_value(self, text: str, character: str) -> Tuple[Optional[str], Optional[str], str]:
         '''return the value from data_dict of data_handler(if exist),
         should be called when 'Ctrl+C' are pressed or equivalent activity'''
         if not self.get_business_service_status():
-            raise Errors.ServiceStatusError
+            raise Errors.ServiceStatusError('business service unavailable')
         
         if text in self.key_list: # success found in key-value pair
             self.active_key = text
             self.active_key_index = self.key_list.index(self.active_key)
             self.active_value = self.data_handler.get_value_from_key(character, self.active_key)
-            return self.active_value, ''
+            return self.active_value, text, ''
         else:
             key = self.data_handler.find_key_from_alias(text)
             if key is not None: # success found in alias, in key-value pairs with corresponding key
@@ -278,9 +307,9 @@ class Business_Handler(threading.Thread):
                 self.active_alias = text
                 self.active_key_index = self.key_list.index(self.active_key)
                 self.active_value = self.data_handler.get_value_from_key(character, self.active_key)
-                return self.active_value, key
+                return self.active_value, key, text
         
             # neither in key-value pairs nor in alias
-            return None, ''
+            return None, None, ''
         
 
