@@ -43,7 +43,7 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-4. 回到目录，确保 main.py 所在位置有 config.json 配置文件，且配置文件内包含了输入/输出和备份文件地址。
+4. 回到目录，确保 main.py 所在位置有 config.json 配置文件，且配置文件内包含了正确的输入/输出和备份文件地址。
 
 
 5. 运行项目：

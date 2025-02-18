@@ -480,7 +480,7 @@ class UI_Handler(threading.Thread):
             if event == "KEY_del_key" and selected_key:
                 response = sg.popup_yes_no('delete this key for all characters?', keep_on_top=True)
                 if response == 'Yes':
-                    if selected_key is not '姓名':
+                    if selected_key != '姓名':
                         key.remove(selected_key)
                         for person in tmp_data_dict:
                             del tmp_data_dict[person][selected_key]
