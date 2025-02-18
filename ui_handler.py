@@ -1,3 +1,4 @@
+from encodings.punycode import T
 import PySimpleGUI as sg
 from error_list import Errors
 from config_handler import ConfigSingleton
@@ -437,8 +438,17 @@ class UI_Handler(threading.Thread):
                 new_character = sg.popup_get_text("new character:", keep_on_top=True)
                 if new_character and new_character not in tmp_data_dict:
                     tmp_data_dict[new_character] = {attr: "" for attr in key}
-                    data_window["KEY_data_modifier_character"].update(values=list(tmp_data_dict.keys())) # type: ignore
-                    data_window["KEY_data_modifier_value"].update('') # type: ignore
+                    data_window["KEY_data_modifier_character"].update(values=list(tmp_data_dict.keys()), # type: ignore
+                                                    set_to_index=[list(tmp_data_dict.keys()).index(new_character)]) # type: ignore
+                    selected_character = new_character
+                    
+                    tmp_data_dict[new_character]['姓名'] = new_character
+                    if self.active_key == '姓名':
+                        data_window["KEY_data_modifier_value"].update(new_character) # type: ignore
+                    else:
+                        data_window["KEY_data_modifier_value"].update('') # type: ignore
+                else:
+                    sg.popup("Please check your input", keep_on_top=True)
             
             if event == "KEY_del_character" and selected_character:
                 response = sg.popup_yes_no('delete character and all his/her keys?', keep_on_top=True)
@@ -470,17 +480,21 @@ class UI_Handler(threading.Thread):
             if event == "KEY_del_key" and selected_key:
                 response = sg.popup_yes_no('delete this key for all characters?', keep_on_top=True)
                 if response == 'Yes':
-                    key.remove(selected_key)
-                    for person in tmp_data_dict:
-                        del tmp_data_dict[person][selected_key]
-                    if len(key) == 0:
-                        selected_key = None
-                        data_window["KEY_data_modifier_key"].update(values=key) # type: ignore
-                        data_window["KEY_data_modifier_value"].update(value="") # type: ignore
-                    else:
-                        selected_key = key[0]
-                        data_window["KEY_data_modifier_key"].update(values=key, set_to_index=[key.index(selected_key)]) # type: ignore
-                        data_window["KEY_data_modifier_value"].update(value=tmp_data_dict[selected_character][selected_key]) # type: ignore
+                    if selected_key is not '姓名':
+                        key.remove(selected_key)
+                        for person in tmp_data_dict:
+                            del tmp_data_dict[person][selected_key]
+                        if len(key) == 0:
+                            selected_key = None
+                            data_window["KEY_data_modifier_key"].update(values=key) # type: ignore
+                            data_window["KEY_data_modifier_value"].update(value="") # type: ignore
+                        else:
+                            selected_key = key[0]
+                            data_window["KEY_data_modifier_key"].update(values=key, set_to_index=[key.index(selected_key)]) # type: ignore
+                            data_window["KEY_data_modifier_value"].update(value=tmp_data_dict[selected_character][selected_key]) # type: ignore
+                    else: # try to delete '姓名'
+                        sg.popup('you may not delete name key', keep_on_top=True)
+                
 
             elif event == "KEY_del_key" and not selected_key:
                 sg.popup("please choose a key to delete", keep_on_top=True)
