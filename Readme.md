@@ -5,7 +5,8 @@
 本项目旨在实现根据当前复制字段自动在剪贴板填充对应文字的功能。通过该项目，可以在填充表格等重复性较高的场景提高操作效率。
 
 ## 功能特点
-快速调用 Excel 内数据并在指定位置粘贴
+- 快速调用 Excel 内数据并在指定位置粘贴
+- 可在程序内快速查看和编辑信息
 
 ## 技术栈
 - python == 3.12
@@ -44,7 +45,11 @@ pip install -r requirements.txt
 ```
 
 4. 回到目录，确保 main.py 所在位置有 config.json 配置文件，且配置文件内包含了正确的输入/输出和备份文件地址。
-
+```config
+# 工作表路径和名称
+'input_data_xlsx_filepath': '$PATH'
+'input_data_sheet_name': '$SHEETNAME'
+```
 
 5. 运行项目：
 

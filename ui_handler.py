@@ -34,7 +34,7 @@ class UI_Handler(threading.Thread):
 
         # define main GUI window
         self.main_window_layout = [
-            [sg.Text("Form_Filler v0.3", font=("Arial", 12, "bold"), text_color="white")],
+            [sg.Text("Form_Filler v0.3.1", font=("Arial", 12, "bold"), text_color="white")],
             [sg.Text("extended copy/paste service", font=("Arial", 9, "italic"), text_color="white")],
             [sg.HorizontalSeparator()],
             
