@@ -94,7 +94,7 @@ class Business_Handler(threading.Thread):
             try:
                 tmp_news = self.queue_business.get(timeout=0.3)
                 self.queue_business.task_done()
-                print(f'[business]: {tmp_news['command']} from {tmp_news['source']}\n')
+                print(f"[business]: {tmp_news['command']} from {tmp_news['source']}\n")
                 pass
             except:
                 tmp_news = None

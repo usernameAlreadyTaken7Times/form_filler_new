@@ -19,7 +19,7 @@ class MessageBroadcaster:
         with self.lock:
             for logic, q in self.queues.items():
                 q: queue.Queue
-                print(f'[braodcast]: task write to queue_{str(logic)}: {msg['command']} from {msg['source']}\n')
+                print(f"[braodcast]: task write to queue_{str(logic)}: {msg['command']} from {msg['source']}\n")
                 q.put(msg)  # all message format should be like {'source': 'xxx', 'command': 'xxx', 'content': 'xxx'}
                 
 

@@ -77,7 +77,7 @@ class Keyboard_Handler(threading.Thread):
             try:
                 tmp_news = self.queue_keyboard.get(timeout=0.3)
                 self.queue_keyboard.task_done() # just assume the task done in this loop
-                print(f'[keyboard]: {tmp_news['command']} from {tmp_news['source']}\n')
+                print(f"[keyboard]: {tmp_news['command']} from {tmp_news['source']}\n")
                 pass
             except:
                 tmp_news = None
@@ -107,7 +107,7 @@ class Keyboard_Handler(threading.Thread):
         while True:
             try:
                 tmp_news = self.queue_keyboard.get(timeout=0.3)
-                print(f'[keyboard_init]: {tmp_news['command']} from {tmp_news['source']}\n')
+                print(f"[keyboard_init]: {tmp_news['command']} from {tmp_news['source']}\n")
             except:
                 tmp_news = None
             

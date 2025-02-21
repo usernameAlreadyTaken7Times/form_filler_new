@@ -166,7 +166,7 @@ class UI_Handler(threading.Thread):
             try:
                 tmp_news = self.poll_messages()
                 if tmp_news:
-                    print(f'[ui]: {tmp_news['command']} from {tmp_news['source']}\n')
+                    print(f"[ui]: {tmp_news['command']} from {tmp_news['source']}\n")
                     pass
             except:
                 tmp_news = None
